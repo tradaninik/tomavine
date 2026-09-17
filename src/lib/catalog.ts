@@ -19,6 +19,7 @@ export type ProductVariantCard = {
 export type ProductCard = {
   id: string;
   nameEn: string;
+  names: Record<string, string> | null;
   category: string;
   botanical: string | null;
   priceMin: number;
@@ -62,6 +63,7 @@ export function productCard(p: ProductWithRelations): ProductCard {
   return {
     id: p.id,
     nameEn: p.nameEn,
+    names: p.names as Record<string, string> | null,
     category: p.category,
     botanical: p.botanical,
     priceMin: p.priceMin,

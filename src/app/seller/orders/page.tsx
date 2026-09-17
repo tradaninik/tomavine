@@ -21,6 +21,17 @@ type Order = {
   total: number;
   deliveryOtp: string | null;
   createdAt: string;
+  // ── ADDED: tolerant address shape (seed orders use line1,
+  // checkout orders use house/street) ──
+  address: {
+    name?: string;
+    phone?: string;
+    line1?: string;
+    house?: string;
+    street?: string;
+    city?: string;
+    pincode?: string;
+  } | null;
   items: Item[];
   payment: { method: string | null; status: string; amount: number } | null;
   user: { name: string | null; phone: string };
@@ -140,6 +151,23 @@ export default function SellerOrdersPage() {
                 </li>
               ))}
             </ul>
+
+            {/* ── ADDED: delivery address (line1 for seed orders,
+                house/street for checkout orders) ── */}
+            {o.address ? (
+              <div className="mt-3 rounded-xl bg-[#F7F3E8] px-4 py-3 text-sm text-[#1C3A2A]/80">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/50">Delivery address</p>
+                <p className="mt-1 font-semibold text-[#1C3A2A]">
+                  {o.address.line1 ?? [o.address.house, o.address.street].filter(Boolean).join(", ")}
+                  {o.address.city ? `, ${o.address.city}` : ""}
+                  {o.address.pincode ? ` — ${o.address.pincode}` : ""}
+                </p>
+                <p className="mt-0.5 text-xs text-[#1C3A2A]/60">
+                  {o.address.name ?? ""}
+                  {o.address.phone ? ` · ${o.address.phone}` : ""}
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-3 flex flex-wrap justify-end gap-4 text-xs text-[#1C3A2A]/60">
               <span>Subtotal {inr(o.subtotal)}</span>

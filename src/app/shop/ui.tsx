@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
-import { CART_EVENT, cartCount, loadCart } from "@/lib/cart";
+import type { FormEvent, ReactNode } from "react";
+import { CART_EVENT, addToCart, cartCount, loadCart } from "@/lib/cart";
+import { LangPill, displayName, useLang } from "@/lib/i18n";
+import type { ProductCard } from "@/lib/catalog";
+
+const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
 // ── Formatting helpers ────────────────────────────────────────
 
@@ -80,6 +85,14 @@ export function statusTone(status: string): string {
   }
 }
 
+export function StatusPill({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusTone(status)}`}>
+      {statusLabel(status)}
+    </span>
+  );
+}
+
 export const inputCls =
   "w-full rounded-xl border border-[#1C3A2A]/15 bg-white px-3 py-2 text-sm text-[#1C3A2A] outline-none transition focus:border-[#2F6B3F] focus:ring-2 focus:ring-[#2F6B3F]/20";
 
@@ -95,8 +108,8 @@ type BtnVariant = "primary" | "forest" | "outline" | "ghost" | "danger";
 type BtnSize = "sm" | "md" | "lg";
 
 const BTN_VARIANTS: Record<BtnVariant, string> = {
-  primary: "bg-[#2F6B3F] text-white hover:bg-[#255732] disabled:bg-[#2F6B3F]/40",
-  forest: "bg-[#1C3A2A] text-[#F7F3E8] hover:bg-[#12251a] disabled:bg-[#1C3A2A]/40",
+  primary: "bg-[#2F6B3F] text-white hover:bg-[#24562F] disabled:bg-[#2F6B3F]/40",
+  forest: "bg-[#1C3A2A] text-[#F7F3E8] hover:bg-[#12271A] disabled:bg-[#1C3A2A]/40",
   outline: "border border-[#1C3A2A]/20 bg-white text-[#1C3A2A] hover:bg-[#F7F3E8] disabled:opacity-40",
   ghost: "text-[#2F6B3F] hover:bg-[#2F6B3F]/10 disabled:opacity-40",
   danger: "bg-rose-600 text-white hover:bg-rose-700 disabled:bg-rose-600/40",
@@ -145,7 +158,7 @@ export function Btn({
 type PillTone = "leaf" | "forest" | "cream" | "amber" | "rose" | "sky";
 
 const PILL_TONES: Record<PillTone, string> = {
-  leaf: "bg-[#2F6B3F]/10 text-[#255732] border border-[#2F6B3F]/20",
+  leaf: "bg-[#2F6B3F]/10 text-[#24562F] border border-[#2F6B3F]/20",
   forest: "bg-[#1C3A2A] text-[#F7F3E8] border border-[#1C3A2A]",
   cream: "bg-[#F7F3E8] text-[#1C3A2A] border border-[#1C3A2A]/10",
   amber: "bg-amber-100 text-amber-800 border border-amber-200",
@@ -165,7 +178,7 @@ export function Price({ price, mrp }: { price: number; mrp?: number }) {
   return (
     <span className="flex items-baseline gap-2">
       <span className="text-lg font-bold text-[#1C3A2A]">{inr(price)}</span>
-      {mrp && mrp > price ? <span className="text-sm text-[#1C3A2A]/40 line-through">{inr(mrp)}</span> : null}
+      {mrp && mrp > price ? <span className="text-sm text-[#8E9A84] line-through">{inr(mrp)}</span> : null}
     </span>
   );
 }
@@ -192,8 +205,8 @@ export function StarRow({ value, className = "" }: { value: number; className?: 
   const filled = Math.max(0, Math.min(5, Math.round(value)));
   return (
     <span className={`text-sm ${className}`} aria-label={`${value} out of 5 stars`}>
-      <span className="text-amber-500">{"★".repeat(filled)}</span>
-      <span className="text-stone-300">{"★".repeat(5 - filled)}</span>
+      <span className="text-[#E39B2D]">{"★".repeat(filled)}</span>
+      <span className="text-[#D6D2BC]">{"★".repeat(5 - filled)}</span>
     </span>
   );
 }
@@ -209,7 +222,7 @@ export function StarInput({ value, onChange }: { value: number; onChange: (stars
           onClick={() => onChange(s)}
           className="text-2xl leading-none transition hover:scale-110"
         >
-          <span className={s <= value ? "text-amber-500" : "text-stone-300"}>★</span>
+          <span className={s <= value ? "text-[#E39B2D]" : "text-[#D6D2BC]"}>★</span>
         </button>
       ))}
       <span className="ml-2 text-sm font-semibold text-[#1C3A2A]">{value > 0 ? `${value}/5` : "Tap to rate"}</span>
@@ -232,7 +245,7 @@ export function ProductThumb({
     lg: "h-44 w-44 text-6xl",
   };
   return (
-    <div className={`flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2F6B3F]/15 via-[#F7F3E8] to-[#2F6B3F]/10 ${sizes[size]} ${className}`}>
+    <div className={`flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30 ${sizes[size]} ${className}`}>
       <span aria-hidden="true">{catEmoji(category)}</span>
     </div>
   );
@@ -251,7 +264,9 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <h1 className="text-2xl font-bold text-[#1C3A2A] sm:text-3xl">{children}</h1>
+      <h1 className="text-2xl font-semibold text-[#1C3A2A] sm:text-3xl" style={SERIF}>
+        {children}
+      </h1>
       {action}
     </div>
   );
@@ -293,6 +308,115 @@ export function ErrBox({ children }: { children: ReactNode }) {
   return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{children}</div>;
 }
 
+// ── Toasts (event-based, no extra state libraries) ───────────
+
+let toastSeq = 0;
+
+export function toast(message: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  toastSeq = toastSeq + 1;
+  window.dispatchEvent(new CustomEvent("tomavine:toast", { detail: { id: toastSeq, message: message } }));
+}
+
+export function ToastHost() {
+  const [items, setItems] = useState<{ id: number; message: string }[]>([]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: number; message: string };
+      setItems((prev) => [...prev, { id: detail.id, message: detail.message }]);
+      window.setTimeout(() => {
+        setItems((prev) => prev.filter((x) => x.id !== detail.id));
+      }, 2600);
+    };
+    window.addEventListener("tomavine:toast", handler);
+    return () => window.removeEventListener("tomavine:toast", handler);
+  }, []);
+
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <div className="pointer-events-none fixed bottom-5 left-1/2 z-50 flex w-[min(92vw,430px)] -translate-x-1/2 flex-col gap-2">
+      {items.map((x) => (
+        <div key={x.id} className="flex items-center gap-2 rounded-2xl bg-[#1C3A2A] px-4 py-3 text-sm text-[#F7F3E8] shadow-xl">
+          <span aria-hidden="true">🌿</span>
+          <span className="font-semibold">{x.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Product card (used by landing, category, rescue, nursery, search) ──
+
+export function ProductTile({ p }: { p: ProductCard }) {
+  const { lang, t } = useLang();
+  const name = displayName(p.names, lang, p.nameEn);
+  const displayPrice = p.rescue ? Math.round(p.priceMin * (1 - p.rescue.pct / 100)) : p.priceMin;
+
+  function quickAdd() {
+    if (p.stock <= 0) {
+      return;
+    }
+    const variantId = p.variants.length > 0 ? p.variants[0].id : null;
+    const res = addToCart(p.id, variantId, 1);
+    if (res.ok) {
+      toast(`${name} · ${t("added")}`);
+    } else if (res.reason) {
+      toast(res.reason);
+    }
+  }
+
+  return (
+    <div className="group flex flex-col overflow-hidden rounded-2xl border border-[#E4E0CE] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+      <Link href={`/shop/p/${p.id}`} className="relative block aspect-square overflow-hidden bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30">
+        <span className="absolute inset-0 flex items-center justify-center text-6xl transition-transform duration-300 group-hover:scale-110" aria-hidden="true">
+          {catEmoji(p.category)}
+        </span>
+        {p.rescue ? (
+          <span className="absolute left-3 top-3 rounded-full bg-[#C14E2A] px-2.5 py-0.5 text-xs font-bold text-white shadow">
+            🏷️ −{p.rescue.pct}%
+          </span>
+        ) : null}
+        {p.stock <= 0 ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-[#F7F3E8]/80 text-sm font-bold uppercase tracking-wide text-[#1C3A2A]">
+            {t("out_of_stock")}
+          </span>
+        ) : null}
+      </Link>
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <Link href={`/shop/p/${p.id}`} className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#20291D]" style={SERIF}>
+          {name}
+        </Link>
+        {p.botanical ? (
+          <p className="truncate text-xs italic text-[#8E9A84]" style={SERIF}>
+            {p.botanical}
+          </p>
+        ) : null}
+        <div className="flex items-baseline gap-2">
+          <span className="text-lg font-bold text-[#1C3A2A]">{inr(displayPrice)}</span>
+          {p.mrp > displayPrice ? <span className="text-xs text-[#8E9A84] line-through">{inr(p.mrp)}</span> : null}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-[#66735F]">
+          <StarRow value={p.avgStars} />
+          {p.reviewCount > 0 ? <span>({p.reviewCount})</span> : null}
+        </div>
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          <Link href={`/shop/nursery/${p.nurserySlug}`} className="truncate text-xs font-semibold text-[#2F6B3F] hover:underline">
+            {p.nurseryName} · {p.nurseryCity}
+          </Link>
+          <Btn onClick={quickAdd} disabled={p.stock <= 0} size="sm" className="w-full">
+            🛒 {t("add_to_cart")}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Storefront chrome (Nav + Footer) ─────────────────────────
 
 type NavUser = {
@@ -302,18 +426,21 @@ type NavUser = {
 };
 
 const NAV_LINKS = [
-  { href: "/shop/category/plants", label: "Plants", accent: false },
-  { href: "/shop/category/saplings", label: "Saplings", accent: false },
-  { href: "/shop/category/inputs", label: "Inputs", accent: false },
-  { href: "/shop/category/pots", label: "Pots", accent: false },
-  { href: "/shop/category/tools", label: "Tools", accent: false },
-  { href: "/shop/nurseries", label: "Nurseries", accent: false },
-  { href: "/shop/rescue", label: "🏷️ Rescue Corner", accent: true },
+  { href: "/shop/category/plants", key: "plants", accent: false },
+  { href: "/shop/category/saplings", key: "saplings", accent: false },
+  { href: "/shop/category/inputs", key: "inputs", accent: false },
+  { href: "/shop/category/pots", key: "pots", accent: false },
+  { href: "/shop/category/tools", key: "tools", accent: false },
+  { href: "/shop/nurseries", key: "nurseries", accent: false },
+  { href: "/shop/rescue", key: "rescue", accent: true },
 ];
 
 export function Nav() {
+  const { t } = useLang();
+  const router = useRouter();
   const [count, setCount] = useState(0);
   const [user, setUser] = useState<NavUser | null>(null);
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     const refresh = () => setCount(cartCount(loadCart()));
@@ -337,41 +464,64 @@ export function Nav() {
     };
   }, []);
 
+  function submitSearch(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const s = q.trim();
+    if (s.length > 0) {
+      router.push(`/shop/search?q=${encodeURIComponent(s)}`);
+      setQ("");
+    }
+  }
+
   return (
-    <header className="sticky top-0 z-40 border-b border-[#1C3A2A]/10 bg-[#F7F3E8]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 text-lg font-bold text-[#1C3A2A]">
-          <span aria-hidden="true">🌱</span>
-          <span>Tomavine</span>
+    <header className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#1C3A2A] text-lg" aria-hidden="true">
+            🌱
+          </span>
+          <span className="hidden text-lg font-semibold text-[#1C3A2A] sm:block" style={SERIF}>
+            Tomavine
+          </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <form onSubmit={submitSearch} className="mx-2 hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-[#D6D2BC] bg-white px-4 py-1.5 md:flex">
+          <span aria-hidden="true" className="text-sm text-[#8E9A84]">
+            🔍
+          </span>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("search_ph")}
+            aria-label={t("search_ph")}
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+        </form>
+        <div className="ml-auto flex items-center gap-2">
+          <LangPill />
           {user ? (
-            <Link
-              href="/shop/orders"
-              className="rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10"
-            >
-              My Orders
+            <Link href="/shop/orders" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
+              {t("my_orders")}
             </Link>
           ) : (
-            <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10">
-              Login
+            <Link href="/login" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
+              {t("login")}
             </Link>
           )}
           <Link
             href="/shop/cart"
-            className="relative inline-flex items-center gap-2 rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#255732]"
+            className="relative inline-flex items-center gap-2 rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]"
           >
             <span aria-hidden="true">🛒</span>
-            <span className="hidden sm:inline">Cart</span>
+            <span className="hidden sm:inline">{t("cart")}</span>
             {count > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-xs font-bold text-[#1C3A2A]">
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E39B2D] px-1 text-xs font-bold text-[#1C3A2A]">
                 {count}
               </span>
             ) : null}
           </Link>
         </div>
       </div>
-      <nav className="border-t border-[#1C3A2A]/5">
+      <nav className="border-t border-[#E4E0CE]/60">
         <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 text-sm">
           {NAV_LINKS.map((link) => (
             <Link
@@ -383,7 +533,7 @@ export function Nav() {
                   : "whitespace-nowrap rounded-full px-3 py-1 font-medium text-[#1C3A2A]/70 hover:bg-[#2F6B3F]/10 hover:text-[#1C3A2A]"
               }
             >
-              {link.label}
+              {t(link.key)}
             </Link>
           ))}
         </div>
@@ -395,7 +545,10 @@ export function Nav() {
 export function Footer() {
   return (
     <footer className="mt-16 bg-[#1C3A2A] px-4 py-8 text-center text-sm text-[#F7F3E8]/60">
-      <p>Tomavine · Where growers meet gardens</p>
+      <p className="text-base font-semibold text-[#F7F3E8]" style={SERIF}>
+        🌱 Tomavine
+      </p>
+      <p className="mt-1">Where growers meet gardens</p>
       <p className="mt-1 text-xs">Cash on delivery · From physically verified nurseries</p>
     </footer>
   );
