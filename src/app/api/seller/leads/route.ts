@@ -11,16 +11,43 @@ export async function GET() {
 
   const { nursery } = auth;
 
+  const products = await db.product.findMany({
+    where: { nurseryId: nursery.id },
+    select: { id: true, nameEn: true, category: true },
+  });
+
+  const productIds = products.map((p) => p.id);
+
   const leads = await db.bulkLead.findMany({
-    where: { product: { nurseryId: nursery.id } },
+    where: { productId: { in: productIds } },
     orderBy: { id: "desc" },
     include: {
-      product: { select: { id: true, nameEn: true, category: true } },
       quotes: { where: { nurseryId: nursery.id } },
     },
   });
 
-  return NextResponse.json({ leads: leads });
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  return NextResponse.json({
+    leads: leads.map((l) => ({
+      id: l.id,
+      qty: l.qty,
+      city: l.city,
+      company: l.company,
+      notes: l.notes,
+      status: l.status,
+      product: productById.get(l.productId) ?? {
+        id: l.productId,
+        nameEn: "Unknown product",
+        category: "unknown",
+      },
+      quotes: l.quotes.map((q) => ({
+        id: q.id,
+        amount: q.amount,
+        status: q.status,
+      })),
+    })),
+  });
 }
 
 export async function POST(request: Request) {
@@ -47,12 +74,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing lead id" }, { status: 400 });
   }
 
-  if (!Number.isInteger(amount) || amount === undefined || amount < 1) {
+  if (amount === undefined || !Number.isInteger(amount) || amount < 1) {
     return NextResponse.json({ error: "Enter a valid quote amount in rupees" }, { status: 400 });
   }
 
+  const ownProducts = await db.product.findMany({
+    where: { nurseryId: nursery.id },
+    select: { id: true },
+  });
+
   const lead = await db.bulkLead.findFirst({
-    where: { id: leadId, product: { nurseryId: nursery.id } },
+    where: {
+      id: leadId,
+      productId: { in: ownProducts.map((p) => p.id) },
+    },
   });
 
   if (!lead) {

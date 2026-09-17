@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         const seq = 1810 + (await tx.order.count());
         return await tx.order.create({ data: {
           code: `NH-${new Date().getFullYear()}-${seq}`,
-          userId: session.sub!, nurseryId, status: "PENDING", mode,
+          userId: session.payload.sub!, nurseryId, status: "PENDING", mode,
           subtotal: g.sub, deliveryFee, tax: g.tax, total, address,
           items: { create: g.items },
           events: { create: { status: "PENDING", actorRole: "CUSTOMER", note: paymentMethod === "cod" ? "COD" : "Online" } },

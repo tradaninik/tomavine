@@ -38,7 +38,7 @@ export async function PATCH(request: Request) {
     mrp?: number;
     stock?: number;
     hidden?: boolean;
-    rescue?: { pct?: number; days?: number } | null;
+    rescue?: { pct: number; days: number } | null;
   };
 
   try {

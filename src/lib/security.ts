@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Ratelimit } from "@upstash/ratelimit";
+import { Ratelimit, type Duration } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
@@ -10,7 +10,7 @@ if (process.env.UPSTASH_URL && process.env.UPSTASH_TOKEN) {
 }
 
 // Rate limits — OTP brute-force and API abuse
-const mk = (prefix: string, limit: number, window: string) =>
+const mk = (prefix: string, limit: number, window: Duration) =>
   redis ? new Ratelimit({ redis, limiter: Ratelimit.fixedWindow(limit, window), prefix }) : null;
 export const otpLimiter = mk("otp", 3, "10 m");
 export const verifyLimiter = mk("verify", 10, "10 m");
