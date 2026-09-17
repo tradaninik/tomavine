@@ -5,8 +5,9 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
 let redis: Redis | null = null;
-if (process.env.UPSTASH_URL && process.env.UPSTASH_TOKEN)
-  redis = new Redis({ url: process.env.UPSTASH_URL, token: process.env.UPSTASH_TOKEN }); redis = new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! });
+if (process.env.UPSTASH_URL && process.env.UPSTASH_TOKEN) {
+  redis = new Redis({ url: process.env.UPSTASH_URL, token: process.env.UPSTASH_TOKEN });
+}
 
 // Rate limits — OTP brute-force and API abuse
 const mk = (prefix: string, limit: number, window: string) =>
@@ -15,7 +16,12 @@ export const otpLimiter = mk("otp", 3, "10 m");
 export const verifyLimiter = mk("verify", 10, "10 m");
 export async function rateOk(l: Ratelimit | null, k: string) {
   if (!l) return true;
-  return (await l.limit(k)).success;
+  try {
+    return (await l.limit(k)).success;
+  } catch (e) {
+    console.warn("[rate] limiter unreachable — allowing request (fail-open)");
+    return true;
+  }
 }
 
 // Razorpay webhook: HMAC over the RAW body (never parsed JSON)

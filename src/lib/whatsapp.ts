@@ -1,30 +1,71 @@
-import { db } from "@/lib/db";
-import { waText } from "@/lib/whatsapp";
+const GRAPH_VERSION = "v22.0";
 
-export async function notifySellerNewOrder(orderId: string) {
-  const o = await db.order.findUnique({ where: { id: orderId }, include: { items: true, nursery: true } });
-  if (!o) return;
-  await waText(o.nursery.phone, [
-    `New order ${o.code}`,
-    ...o.items.map(i => `${i.nameSnap} ×${i.qty}`),
-    `${o.mode === "PICKUP" ? "Pickup" : (o.address as any).city} · Rs ${o.total}`,
-    "", "Reply 1 to ACCEPT · 2 to REJECT", `Or manage: ${process.env.APP_URL}/seller/orders`,
-  ].join("\n"));
-  await db.whatsappBinding.upsert({
-    where: { userId: o.nursery.ownerId },
-    create: { userId: o.nursery.ownerId, waId: o.nursery.phone, lastAlertOrderId: o.id },
-    update: { lastAlertOrderId: o.id },
-  });
+export async function waText(to: string, text: string): Promise<string | null> {
+  const phoneId = process.env.WA_PHONE_NUMBER_ID ?? "";
+  const token = process.env.WA_TOKEN ?? "";
+
+  if (phoneId === "" || token === "") {
+    console.log(`[WA:skipped] to=${to} :: ${text}`);
+    return null;
+  }
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: to.replace(/[^0-9]/g, ""),
+        type: "text",
+        text: {
+          preview_url: false,
+          body: text,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error(`[WA:error] send failed (${res.status}): ${detail}`);
+      return null;
+    }
+
+    const data = (await res.json()) as { messages?: { id: string }[] };
+
+    return data.messages?.[0]?.id ?? null;
+  } catch (e) {
+    console.error("[WA:error] send failed:", e);
+    return null;
+  }
 }
 
-export async function buyerUpdate(orderId: string) {
-  const o = await db.order.findUnique({ where: { id: orderId }, include: { user: true, nursery: true, payment: true } });
-  if (!o) return;
-  const map: Record<string, string> = {
-    CONFIRMED: `Order ${o.code} confirmed by ${o.nursery.name}. Track: ${process.env.APP_URL}`,
-    OUT_FOR_DELIVERY: `Order ${o.code} is out for delivery` + (o.payment?.method === "cod" ? `. Pay Rs ${o.total} — show this PIN: ${o.deliveryOtp}` : "."),
-    DELIVERED: `Order ${o.code} delivered. Care tips and review: ${process.env.APP_URL}`,
-    CANCELLED: `Order ${o.code} cancelled. Refund (if paid) in 3-5 days.`,
-  };
-  if (map[o.status]) await waText(o.user.phone, map[o.status]);
+export async function waMarkRead(messageId: string): Promise<void> {
+  const phoneId = process.env.WA_PHONE_NUMBER_ID ?? "";
+  const token = process.env.WA_TOKEN ?? "";
+
+  if (phoneId === "" || token === "") {
+    console.log(`[WA:skipped] read=${messageId}`);
+    return;
+  }
+
+  try {
+    await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId,
+      }),
+    });
+  } catch (e) {
+    console.error("[WA:error] mark-read failed:", e);
+  }
 }
