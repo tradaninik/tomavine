@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum Scope {
+  RADIUS
+  CITY
+  STATE
+  INDIA
+}
+
+enum DeliveryMode {
+  DELIVERY
+  PICKUP
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  role      Role     @default(CUSTOMER)
+  lang      String   @default("en")
+  city      String?
+  pincode   String?
+  createdAt DateTime @default(now())
+  orders        Order[]
+  reviews       Review[]
+  journals      PlantJournal[]
+  subscriptions Subscription[]
+  waBinding     WhatsappBinding?
+  auditLogs     AuditLog[]
+  nursery       Nursery?
+  
+  @@index([phone])
+}
+
+model Nursery {
+  id             String   @id @default(cuid())
+  ownerId        String   @unique
+  owner          User     @relation(fields: [ownerId], references: [id])
+  name           String
+  slug           String   @unique
+  phone          String
+  gstin          String
+  city           String
+  area           String
+  pincode        String
+  scope          Scope    @default(RADIUS)
+  scopeKm        Int?
+  bulkOk         Boolean  @default(true)
+  retailOk       Boolean  @default(true)
+  status         VerificationStatus @default(PENDING)
+  physVerifiedAt DateTime?
+  growArea       String?
+  ratingAvg      Float    @default(0)
+  products       Product[]
+  services       ServiceListing[]
+  orders         Order[]
+  quotes         Quote[]
+
+  @@index([city])
+  @@index([status])
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  nurseryId  String
+  nursery    Nursery @relation(fields: [nurseryId], references: [id])
+  category   String
+  nameEn     String
+  names      Json?
+  botanical  String?
+  badges     Json?
+  care       Json?
+  agri       Json?
+  provenance Json?
+  priceMin   Int
+  mrp        Int
+  stock      Int      @default(0)
+  hidden     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  variants    ProductVariant[]
+  rescue      RescueListing?
+  orderItems  OrderItem[]
+  reviews     Review[]
+
+  @@index([nurseryId])
+  @@index([category])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  price     Int
+  sku       String  @unique
+}
+
+model RescueListing {
+  productId String   @unique
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pct       Int
+  expiresAt DateTime
+}
+
+model Order {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+  nurseryId   String
+  nursery     Nursery @relation(fields: [nurseryId], references: [id])
+  status      OrderStatus @default(PENDING)
+  mode        DeliveryMode @default(DELIVERY)
+  subtotal    Int
+  deliveryFee Int
+  tax         Int
+  discount    Int     @default(0)
+  total       Int
+  address     Json
+  deliveryOtp String?
+  meta        Json?
+  createdAt   DateTime @default(now())
+  items   OrderItem[]
+  events  OrderEvent[]
+  payment Payment?
+  review  Review?
+
+  @@index([userId])
+  @@index([nurseryId, status])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  variantId String?
+  qty       Int
+  unitPrice Int
+  nameSnap  String
+  vlabel    String?
+}
+
+model OrderEvent {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actorRole Role
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id             String @id @default(cuid())
+  orderId        String @unique
+  order          Order  @relation(fields: [orderId], references: [id])
+  provider       String @default("razorpay")
+  rzpOrderId     String? @unique
+  rzpPaymentId   String?
+  method         String?
+  amount         Int
+  status         PaymentStatus @default(CREATED)
+  capturedAt     DateTime?
+  idempotencyKey String? @unique
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+}
+
+model Review {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  orderId   String? @unique
+  order     Order?  @relation(fields: [orderId], references: [id])
+  stars     Int
+  text      String
+  reply     String?
+  createdAt DateTime @default(now())
+}
+
+model ServiceListing {
+  id          String @id @default(cuid())
+  nurseryId   String
+  nursery     Nursery @relation(fields: [nurseryId], references: [id])
+  type        String
+  name        String
+  price       Int
+  includes    Json
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id])
+  serviceId   String
+  service     ServiceListing @relation(fields: [serviceId], references: [id])
+  status      String @default("active")
+  nextVisitAt DateTime
+}
+
+model PlantJournal {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id])
+  productId String
+  orderId   String
+  entries   Json
+}
+
+model BulkLead {
+  id        String @id @default(cuid())
+  productId String
+  qty       Int
+  city      String
+  company   String
+  notes     String?
+  status    String @default("new")
+  parts     Json?
+  quotes    Quote[]
+}
+
+model Quote {
+  id        String @id @default(cuid())
+  leadId    String
+  lead      BulkLead @relation(fields: [leadId], references: [id])
+  nurseryId String
+  nursery   Nursery @relation(fields: [nurseryId], references: [id])
+  amount    Int
+  status    String @default("sent")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  hash      String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model WhatsappBinding {
+  userId           String @id
+  user             User @relation(fields: [userId], references: [id])
+  waId             String @unique
+  lastAlertOrderId String?
+}
+
+model WhatsappLog {
+  id        String   @id @default(cuid())
+  waId      String
+  template  String?
+  body      String?
+  direction String
+  status    String?
+  createdAt DateTime @default(now())
+
+  @@index([waId, createdAt])
+}
+
+model AuditLog {
+  id      String @id @default(cuid())
+  actorId String
+  actor   User @relation(fields: [actorId], references: [id])
+  action  String
+  entity  String
+  meta    Json?
+  at      DateTime @default(now())
+
+  @@index([actorId])
+}
