@@ -68,7 +68,13 @@ export default function LoginPage() {
         throw new Error(data.error ?? "Could not verify code");
       }
 
-      const dest = data.role === "SELLER" ? "/seller" : "/";
+      // ── CHANGED: role-aware destination after login ──
+      let dest = "/";
+      if (data.role === "ADMIN") {
+        dest = "/admin";
+      } else if (data.role === "SELLER") {
+        dest = "/seller";
+      }
 
       router.push(dest);
       router.refresh();
