@@ -41,6 +41,7 @@ export type CartProduct = {
 export type CartGroupLine = {
   product: CartProduct;
   variant: CartVariant | null;
+  variantId: string | null;
   qty: number;
   unit: number;
   lineSub: number;
@@ -229,7 +230,7 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
       };
       groups.set(product.nurseryId, group);
     }
-    group.lines.push({ product: product, variant: variant, qty: line.qty, unit: unit, lineSub: lineSub, lineTax: lineTax });
+    group.lines.push({ product: product, variant: variant, variantId: line.variantId, qty: line.qty, unit: unit, lineSub: lineSub, lineTax: lineTax });
     group.sub += lineSub;
     group.tax += lineTax;
   }

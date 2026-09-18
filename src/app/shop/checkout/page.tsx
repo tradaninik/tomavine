@@ -1,0 +1,379 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
+import { Btn, Card, Empty, ErrBox, Field, Loading, SectionTitle, inr, inputCls } from "../ui";
+import { useLang } from "@/lib/i18n";
+import type { ProductCard } from "@/lib/catalog";
+import { clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
+import type { CartLine } from "@/lib/cart";
+
+const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
+const STORE_KEY = "tv_orders_last";
+
+type Me = { name: string | null; phone: string; city: string | null; pincode: string | null } | null;
+
+function newIdemKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "k-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+}
+
+function toPhoneDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
+  }
+  if (digits.length === 10) {
+    return digits;
+  }
+  return "";
+}
+
+function SumRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm text-[#66735F]">
+      <span>{label}</span>
+      <span className="font-semibold text-[#20291D]">{value}</span>
+    </div>
+  );
+}
+
+const MODE_ON = "flex w-full items-start gap-3 rounded-2xl border-2 border-[#2F6B3F] bg-[#EDF2E6] p-4 text-left";
+const MODE_OFF = "flex w-full items-start gap-3 rounded-2xl border border-[#D6D2BC] bg-white p-4 text-left transition hover:border-[#2F6B3F]/50";
+const DOT_ON = "mt-0.5 h-4 w-4 shrink-0 rounded-full border-[5px] border-[#2F6B3F]";
+const DOT_OFF = "mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-[#D6D2BC]";
+
+export default function CheckoutPage() {
+  const { t } = useLang();
+  const router = useRouter();
+  const [lines, setLines] = useState<CartLine[]>([]);
+  const [products, setProducts] = useState<ProductCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState<Me>(null);
+  const [meChecked, setMeChecked] = useState(false);
+  const [mode, setMode] = useState<"DELIVERY" | "PICKUP">("DELIVERY");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [house, setHouse] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [idemKey] = useState<string>(newIdemKey);
+
+  useEffect(() => {
+    const current = loadCart();
+    setLines(current);
+    if (current.length === 0) {
+      setLoading(false);
+      return;
+    }
+    const ids = current.map((l) => l.productId).join(",");
+    fetch(`/api/catalog/products?ids=${encodeURIComponent(ids)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("failed"))))
+      .then((data) => {
+        if (data && Array.isArray(data.products)) {
+          setProducts(data.products);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setMeChecked(true);
+        if (data && data.user) {
+          setMe(data.user);
+          if (typeof data.user.name === "string") {
+            setName(data.user.name);
+          }
+          const digits = toPhoneDigits(String(data.user.phone ?? ""));
+          if (digits.length === 10) {
+            setPhone(digits);
+          }
+          if (typeof data.user.city === "string") {
+            setCity(data.user.city);
+          }
+          if (typeof data.user.pincode === "string") {
+            setPincode(data.user.pincode);
+          }
+        }
+      })
+      .catch(() => {
+        if (active) setMeChecked(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const missing = missingLines(lines, products);
+  const totals = computeTotals(lines, products, mode);
+  const formValid =
+    name.trim().length >= 2 &&
+    /^[6-9]\d{9}$/.test(phone.trim()) &&
+    house.trim().length >= 1 &&
+    city.trim().length >= 2 &&
+    /^[1-9]\d{5}$/.test(pincode.trim());
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (submitting) {
+      return;
+    }
+    if (!formValid || missing.length > 0 || lines.length === 0) {
+      setSubmitError(t("err_generic"));
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "idempotency-key": idemKey },
+        body: JSON.stringify({
+          items: lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })),
+          mode: mode,
+          address: {
+            name: name.trim(),
+            phone: "+91" + phone.trim(),
+            house: house.trim(),
+            street: street.trim() === "" ? undefined : street.trim(),
+            city: city.trim(),
+            pincode: pincode.trim(),
+          },
+          paymentMethod: "cod",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+      if (!res.ok) {
+        if (data && data.error === "out_of_stock" && data.item) {
+          setSubmitError(t("err_stock", { item: data.item }));
+        } else if (data && (data.error === "unavailable" || data.error === "nursery_unavailable")) {
+          setSubmitError(t("err_unavailable"));
+        } else {
+          setSubmitError(t("err_generic"));
+        }
+        return;
+      }
+      clearCart();
+      const payload = {
+        orders: data && Array.isArray(data.orders) ? data.orders : [],
+        duplicate: data ? data.duplicate === true : false,
+      };
+      window.sessionStorage.setItem(STORE_KEY, JSON.stringify(payload));
+      router.push("/shop/success");
+    } catch {
+      setSubmitError(t("err_generic"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading || !meChecked) {
+    return <Loading />;
+  }
+
+  if (!me) {
+    return (
+      <Empty emoji="🔐" title={t("login_to_order")} action={<Btn href="/login">{t("login")}</Btn>} />
+    );
+  }
+
+  if (lines.length === 0) {
+    return (
+      <Empty
+        emoji="🛒"
+        title={t("cart_empty")}
+        text={t("cart_empty_s")}
+        action={<Btn href="/shop/category/plants">{t("browse")}</Btn>}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <SectionTitle>🧾 {t("checkout")}</SectionTitle>
+      <form onSubmit={submit} className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-4">
+          <Card>
+            <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
+              📍 {t("address")}
+            </h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Field label={t("full_name")}>
+                <input
+                  className={inputCls}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  minLength={2}
+                  autoComplete="name"
+                />
+              </Field>
+              <Field label={t("phone")} hint={t("phone_hint")}>
+                <div className="flex">
+                  <span className="grid place-items-center rounded-l-xl border border-r-0 border-[#1C3A2A]/15 bg-[#F7F3E8] px-3 text-sm font-bold text-[#1C3A2A]">
+                    +91
+                  </span>
+                  <input
+                    className={`${inputCls} rounded-l-none`}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    required
+                    inputMode="numeric"
+                    pattern="[6-9][0-9]{9}"
+                    autoComplete="tel-national"
+                  />
+                </div>
+              </Field>
+              <Field label={t("house")}>
+                <input
+                  className={inputCls}
+                  value={house}
+                  onChange={(e) => setHouse(e.target.value)}
+                  required
+                  autoComplete="address-line1"
+                />
+              </Field>
+              <Field label={t("street")}>
+                <input
+                  className={inputCls}
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  autoComplete="address-line2"
+                />
+              </Field>
+              <Field label={t("city_label")}>
+                <input
+                  className={inputCls}
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  required
+                  minLength={2}
+                  autoComplete="address-level2"
+                />
+              </Field>
+              <Field label={t("pincode")}>
+                <input
+                  className={inputCls}
+                  value={pincode}
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  inputMode="numeric"
+                  pattern="[1-9][0-9]{5}"
+                  autoComplete="postal-code"
+                />
+              </Field>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
+              🚚 {t("delivery")}
+            </h2>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setMode("DELIVERY")} className={mode === "DELIVERY" ? MODE_ON : MODE_OFF}>
+                <span className={mode === "DELIVERY" ? DOT_ON : DOT_OFF} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#20291D]">{t("delivery_mode")}</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => setMode("PICKUP")} className={mode === "PICKUP" ? MODE_ON : MODE_OFF}>
+                <span className={mode === "PICKUP" ? DOT_ON : DOT_OFF} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#20291D]">{t("pickup_mode")}</span>
+                  <span className="block text-xs text-[#66735F]">{t("pickup_note")}</span>
+                </span>
+              </button>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
+              💵 {t("payment")}
+            </h2>
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border-2 border-[#2F6B3F] bg-[#EDF2E6] p-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2F6B3F] text-lg text-white" aria-hidden="true">
+                💵
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#20291D]">{t("trust_cod")}</p>
+                <p className="text-xs text-[#66735F]">{t("cod_note")}</p>
+              </div>
+              <span className="ml-auto h-5 w-5 shrink-0 rounded-full border-[5px] border-[#2F6B3F]" aria-hidden="true" />
+            </div>
+          </Card>
+        </div>
+
+        <div>
+          <Card className="lg:sticky lg:top-28">
+            <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
+              {t("order_summary")}
+            </h2>
+            {missing.length > 0 ? (
+              <div className="mt-3">
+                <ErrBox>
+                  {t("err_unavailable")}{" "}
+                  <Link href="/shop/cart" className="font-bold underline">
+                    {t("cart_title")}
+                  </Link>
+                </ErrBox>
+              </div>
+            ) : null}
+            {totals.orderCount > 1 ? (
+              <p className="mb-3 mt-3 rounded-xl bg-[#EDF2E6] p-3 text-xs font-semibold text-[#24562F]">
+                📦 {t("per_nursery", { n: totals.orderCount })}
+              </p>
+            ) : null}
+            <div className="mt-3 space-y-1.5">
+              {totals.groups.map((g) => (
+                <div key={g.nurseryId} className="flex items-center justify-between gap-2 text-xs text-[#66735F]">
+                  <span className="min-w-0 truncate">
+                    {g.nurseryName} · {g.lines.length}
+                  </span>
+                  <span className="shrink-0 font-bold text-[#20291D]">{inr(g.total)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 space-y-1.5 border-t border-[#E4E0CE] pt-3">
+              <SumRow label={t("subtotal")} value={inr(totals.sub)} />
+              <SumRow label={t("gst")} value={inr(totals.tax)} />
+              <SumRow label={t("delivery")} value={inr(totals.delivery)} />
+              <SumRow label={t("cod_fee")} value={inr(totals.cod)} />
+            </div>
+            <div className="mt-3 flex justify-between border-t border-dashed border-[#D6D2BC] pt-3 text-lg font-bold text-[#1C3A2A]">
+              <span>{t("total")}</span>
+              <span>{inr(totals.total)}</span>
+            </div>
+            {submitError ? (
+              <div className="mt-3">
+                <ErrBox>{submitError}</ErrBox>
+              </div>
+            ) : null}
+            <Btn type="submit" disabled={submitting || !formValid || missing.length > 0} size="lg" className="mt-4 w-full">
+              {submitting ? t("placing") : t("place_order")}
+            </Btn>
+            <Btn href="/shop/cart" variant="ghost" size="sm" className="mt-2 w-full">
+              ← {t("cart_title")}
+            </Btn>
+          </Card>
+        </div>
+      </form>
+    </div>
+  );
+}
