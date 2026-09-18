@@ -27,6 +27,7 @@ export type CartVariant = {
 export type CartProduct = {
   id: string;
   nameEn: string;
+  names?: Record<string, string> | null; // NEW: regional names (supplied by the catalog API; optional)
   category: string;
   priceMin: number;
   stock: number;
