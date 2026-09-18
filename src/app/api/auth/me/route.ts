@@ -11,9 +11,25 @@ export async function GET() {
   if (!userId) {
     return NextResponse.json({ user: null });
   }
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, phone: true, role: true, city: true, pincode: true },
-  });
-  return NextResponse.json({ user: user });
+
+  async function load() {
+    return db.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, phone: true, role: true, city: true, pincode: true },
+    });
+  }
+
+  try {
+    const user = await load();
+    return NextResponse.json({ user: user });
+  } catch {
+    // Neon free tier sleeps — wait a moment and try once more (known gotcha)
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const user = await load();
+      return NextResponse.json({ user: user });
+    } catch {
+      return NextResponse.json({ user: null });
+    }
+  }
 }
