@@ -441,6 +441,7 @@ export function Nav() {
   const [count, setCount] = useState(0);
   const [user, setUser] = useState<NavUser | null>(null);
   const [q, setQ] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const refresh = () => setCount(cartCount(loadCart()));
@@ -473,6 +474,21 @@ export function Nav() {
     }
   }
 
+  async function logout() {
+    if (loggingOut) {
+      return;
+    }
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore network errors — clear local state and go home regardless
+    }
+    setUser(null);
+    setLoggingOut(false);
+    router.push("/");
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
@@ -499,9 +515,24 @@ export function Nav() {
         <div className="ml-auto flex items-center gap-2">
           <LangPill />
           {user ? (
-            <Link href="/shop/orders" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
-              {t("my_orders")}
-            </Link>
+            <>
+              <Link href="/shop/orders" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
+                {t("my_orders")}
+              </Link>
+              {user.role === "ADMIN" ? (
+                <Link href="/admin" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#24562F] hover:bg-[#2F6B3F]/10 sm:block">
+                  {t("admin")}
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={logout}
+                disabled={loggingOut}
+                className="rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#C14E2A] hover:text-[#C14E2A] disabled:opacity-50"
+              >
+                {t("logout")}
+              </button>
+            </>
           ) : (
             <Link href="/login" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
               {t("login")}

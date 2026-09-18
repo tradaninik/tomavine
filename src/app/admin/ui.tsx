@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -183,6 +184,22 @@ export function Empty({ emoji = "🌱", title, text, action }: { emoji?: string;
 
 export function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function logout() {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // network hiccup — still head to login; the cookie clears server-side when the call lands
+    }
+    router.push("/login");
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b-4 border-[#2F6B3F] bg-[#1C3A2A] text-[#F7F3E8]">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
@@ -215,6 +232,14 @@ export function AdminNav() {
         >
           Storefront ↗
         </Link>
+        <button
+          type="button"
+          onClick={logout}
+          disabled={busy}
+          className="shrink-0 rounded-xl border border-[#F7F3E8]/30 px-3 py-2 text-sm font-semibold text-[#F7F3E8] transition hover:bg-white/10 disabled:opacity-50"
+        >
+          Logout
+        </button>
       </div>
     </header>
   );
