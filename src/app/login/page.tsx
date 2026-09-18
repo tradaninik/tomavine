@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { FormEvent } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +14,11 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  async function sendOtp() {
+  async function sendOtp(ev: FormEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (busy) {
+      return;
+    }
     setError("");
 
     if (!/^\d{10}$/.test(digits)) {
@@ -45,7 +50,11 @@ export default function LoginPage() {
     }
   }
 
-  async function verify() {
+  async function verify(ev: FormEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (busy) {
+      return;
+    }
     setError("");
 
     if (!/^\d{6}$/.test(code)) {
@@ -68,7 +77,6 @@ export default function LoginPage() {
         throw new Error(data.error ?? "Could not verify code");
       }
 
-      // ── CHANGED: role-aware destination after login ──
       let dest = "/";
       if (data.role === "ADMIN") {
         dest = "/admin";
@@ -92,7 +100,7 @@ export default function LoginPage() {
         <p className="text-center text-sm text-[#1C3A2A]/60">Where growers meet gardens</p>
 
         {step === 1 ? (
-          <div className="mt-6 space-y-4">
+          <form onSubmit={sendOtp} className="mt-6 space-y-4">
             <label className="block text-sm font-medium text-[#1C3A2A]">
               Mobile number
               <div className="mt-1 flex">
@@ -111,15 +119,15 @@ export default function LoginPage() {
             </label>
 
             <button
-              onClick={sendOtp}
+              type="submit"
               disabled={busy}
               className="w-full rounded-xl bg-[#2F6B3F] px-4 py-3 font-semibold text-white transition hover:bg-[#255732] disabled:opacity-50"
             >
               {busy ? "Sending…" : "Send code"}
             </button>
-          </div>
+          </form>
         ) : (
-          <div className="mt-6 space-y-4">
+          <form onSubmit={verify} className="mt-6 space-y-4">
             {info ? (
               <p className="rounded-xl bg-[#2F6B3F]/10 px-3 py-2 text-xs text-[#2F6B3F]">{info}</p>
             ) : null}
@@ -136,7 +144,7 @@ export default function LoginPage() {
             </label>
 
             <button
-              onClick={verify}
+              type="submit"
               disabled={busy}
               className="w-full rounded-xl bg-[#2F6B3F] px-4 py-3 font-semibold text-white transition hover:bg-[#255732] disabled:opacity-50"
             >
@@ -144,6 +152,7 @@ export default function LoginPage() {
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setStep(1);
                 setCode("");
@@ -153,7 +162,7 @@ export default function LoginPage() {
             >
               Use a different number
             </button>
-          </div>
+          </form>
         )}
 
         {error ? (
