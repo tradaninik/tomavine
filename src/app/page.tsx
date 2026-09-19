@@ -31,12 +31,20 @@ type NurseryCard = {
   productCount: number;
 };
 
+type NavUser = {
+  name: string | null;
+  phone: string;
+  role: string;
+};
+
 function Landing() {
   const { t } = useLang();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [nurseries, setNurseries] = useState<NurseryCard[]>([]);
+  const [user, setUser] = useState<NavUser | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     fetch("/api/catalog/products")
@@ -57,12 +65,41 @@ function Landing() {
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data && data.user) {
+          setUser(data.user);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function submitSearch(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const s = q.trim();
     if (s.length > 0) {
       router.push(`/shop/search?q=${encodeURIComponent(s)}`);
     }
+  }
+
+  async function logout() {
+    if (loggingOut) {
+      return;
+    }
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore network errors — clear local state regardless
+    }
+    setUser(null);
+    setLoggingOut(false);
   }
 
   return (
@@ -79,9 +116,30 @@ function Landing() {
           </Link>
           <div className="flex items-center gap-2">
             <LangPill />
-            <Link href="/login" className="rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]">
-              {t("login")}
-            </Link>
+            {user ? (
+              <>
+                <Link href="/shop/orders" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
+                  {t("my_orders")}
+                </Link>
+                {user.role === "ADMIN" ? (
+                  <Link href="/admin" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#24562F] hover:bg-[#2F6B3F]/10 sm:block">
+                    {t("admin")}
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={logout}
+                  disabled={loggingOut}
+                  className="rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#C14E2A] hover:text-[#C14E2A] disabled:opacity-50"
+                >
+                  {t("logout")}
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]">
+                {t("login")}
+              </Link>
+            )}
           </div>
         </div>
       </header>
