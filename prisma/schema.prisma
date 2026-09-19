@@ -133,7 +133,7 @@ model ProductVariant {
 
 model RescueListing {
   productId String   @unique
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   pct       Int
   expiresAt DateTime
 }
@@ -319,4 +319,20 @@ model AuditLog {
   at      DateTime @default(now())
 
   @@index([actorId])
+}
+
+model TaxonomyTerm {
+  id        String   @id @default(cuid())
+  kind      String
+  label     String
+  names     Json?
+  groupName String?
+  note      String?
+  meta      Json?
+  sort      Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([kind, label])
+  @@index([kind, active, sort])
 }
