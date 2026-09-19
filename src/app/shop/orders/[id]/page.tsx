@@ -109,6 +109,7 @@ export default function OrderDetailPage() {
   const [pickText, setPickText] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   const load = useCallback(() => {
     setOrder(null);
@@ -180,6 +181,28 @@ export default function OrderDetailPage() {
     setReviewBusy(false);
   }
 
+  async function cancelOrder() {
+    if (cancelBusy) {
+      return;
+    }
+    if (!window.confirm(t("cancel_confirm"))) {
+      return;
+    }
+    setCancelBusy(true);
+    try {
+      const res = await fetch(`/api/customer/orders/${id}/cancel`, { method: "POST" });
+      if (res.ok) {
+        toast(t("cancel_ok"));
+      } else {
+        toast(t("err_cancel"));
+      }
+      load();
+    } catch {
+      toast(t("err_cancel"));
+    }
+    setCancelBusy(false);
+  }
+
   if (id.length === 0 || error) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
@@ -243,6 +266,17 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="space-y-5">
+        {order.status === "PENDING" || order.status === "CONFIRMED" ? (
+          <Card className="border-[#C14E2A]/25 bg-[#F7F3E8]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="max-w-md text-sm text-[#66735F]">{t("cancel_note")}</p>
+              <Btn variant="danger" onClick={cancelOrder} disabled={cancelBusy}>
+                {t("cancel_order")}
+              </Btn>
+            </div>
+          </Card>
+        ) : null}
+
         <Card>
           <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">{t("items")}</p>
           <div className="mt-3 space-y-3">

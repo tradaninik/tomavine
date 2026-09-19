@@ -372,7 +372,7 @@ export function ProductTile({ p }: { p: ProductCard }) {
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-[#E4E0CE] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-      <Link href={`/shop/p/${p.id}`} className="relative block aspect-square overflow-hidden bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30">
+      <Link href={`/shop/product/${p.id}`} className="relative block aspect-square overflow-hidden bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30">
         <span className="absolute inset-0 flex items-center justify-center text-6xl transition-transform duration-300 group-hover:scale-110" aria-hidden="true">
           {catEmoji(p.category)}
         </span>
@@ -388,7 +388,7 @@ export function ProductTile({ p }: { p: ProductCard }) {
         ) : null}
       </Link>
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <Link href={`/shop/p/${p.id}`} className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#20291D]" style={SERIF}>
+        <Link href={`/shop/product/${p.id}`} className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#20291D]" style={SERIF}>
           {name}
         </Link>
         {p.botanical ? (
