@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
-import { TAXONOMY_SEED_BASE } from "@/lib/taxonomySeed";
+import { TAXONOMY_SEED_BASE } from "@/lib/taxonomySeed.ts";
 import { TAXONOMY_SEED_CROPS } from "@/lib/taxonomySeedCrops";
 
 // ─────────────────────────────────────────────────────────────
