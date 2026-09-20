@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { TAXONOMY_SEED_BASE } from "@/lib/taxonomySeed";
 import { TAXONOMY_SEED_CROPS } from "@/lib/taxonomySeedCrops";
 
@@ -18,7 +19,10 @@ export type TaxonomySeedTerm = {
   groupName: string;
   note?: string;
   names?: Record<string, string>;
-  meta?: Record<string, unknown>;
+  // JSON-safe by design: Prisma's JSON columns accept only real
+  // JSON values, so meta values are strings, numbers or booleans
+  // — never nested objects or unknowns.
+  meta?: Record<string, string | number | boolean>;
 };
 
 export type TaxonomyTermDTO = {
@@ -112,10 +116,10 @@ export async function ensureTaxonomySeeded(): Promise<void> {
       data: TAXONOMY_SEED.map((term, i) => ({
         kind: term.kind,
         label: term.label,
-        names: term.names ?? undefined,
+        names: term.names === undefined ? undefined : (term.names as Prisma.InputJsonValue),
         groupName: term.groupName,
-        note: term.note ?? undefined,
-        meta: term.meta ?? undefined,
+        note: term.note,
+        meta: term.meta === undefined ? undefined : (term.meta as Prisma.InputJsonValue),
         sort: i,
       })),
       skipDuplicates: true,
