@@ -97,7 +97,7 @@ export default function CartPage() {
                     <div key={l.product.id + (l.variantId ?? "")} className="flex gap-3 py-4">
                       <ProductThumb category={l.product.category} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <Link href={`/shop/p/${l.product.id}`} className="line-clamp-2 text-sm font-semibold text-[#20291D] hover:underline">
+                        <Link href={`/shop/product/${l.product.id}`} className="line-clamp-2 text-sm font-semibold text-[#20291D] hover:underline">
                           {name}
                         </Link>
                         {l.variant ? <p className="text-xs text-[#66735F]">{l.variant.label}</p> : null}
