@@ -40,7 +40,7 @@ async function main() {
     data: {
       phone: ADMIN_PHONE,
       name: "Tomavine Admin",
-      role: "ADMIN",
+      role: "SUPER_ADMIN",
       city: "Bengaluru",
     },
   });
@@ -324,7 +324,7 @@ async function main() {
   console.log("");
   console.log("  Seller login phone : " + SELLER_PHONE);
   console.log("  Buyer login phone  : " + BUYER_PHONE);
-  console.log("  Admin login phone  : " + admin.phone);
+  console.log("  Super admin login  : " + admin.phone);
   console.log("  Test order         : NH-2025-1810 (COD, PENDING, total ₹924)");
   console.log("");
 }
