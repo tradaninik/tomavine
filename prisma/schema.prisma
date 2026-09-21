@@ -11,6 +11,7 @@ enum Role {
   CUSTOMER
   SELLER
   ADMIN
+  SUPER_ADMIN
 }
 
 enum VerificationStatus {
@@ -56,6 +57,7 @@ model User {
   lang      String   @default("en")
   city      String?
   pincode   String?
+  permissions Json?
   createdAt DateTime @default(now())
   orders        Order[]
   reviews       Review[]
@@ -64,7 +66,7 @@ model User {
   waBinding     WhatsappBinding?
   auditLogs     AuditLog[]
   nursery       Nursery?
-  
+
   @@index([phone])
 }
 
@@ -213,11 +215,11 @@ model WebhookEvent {
 }
 
 model Review {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id])
   userId    String
-  user      User    @relation(fields: [userId], references: [id])
+  user      User @relation(fields: [userId], references: [id])
   orderId   String? @unique
   order     Order?  @relation(fields: [orderId], references: [id])
   stars     Int
