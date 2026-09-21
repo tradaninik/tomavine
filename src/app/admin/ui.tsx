@@ -10,6 +10,7 @@ const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 const LINKS = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/nurseries", label: "Nurseries" },
+  { href: "/admin/taxonomy", label: "Taxonomy" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/audit", label: "Audit log" },
 ];
