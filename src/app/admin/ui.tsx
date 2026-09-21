@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -187,6 +187,45 @@ export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Tabs render from the default list immediately, then adjust
+  // once /api/auth/me says who's logged in: SUPER_ADMIN gains the
+  // Users tab; a scoped ADMIN loses tabs they lack. An ADMIN whose
+  // permissions were never managed (null) keeps every tab.
+  const [links, setLinks] = useState(LINKS);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d || !d.user) {
+          return;
+        }
+        const role = String(d.user.role);
+        if (role === "SUPER_ADMIN") {
+          setLinks([...LINKS, { href: "/admin/users", label: "Users" }]);
+          return;
+        }
+        if (role === "ADMIN" && Array.isArray(d.user.permissions)) {
+          const allowed = new Set(d.user.permissions.map(String));
+          setLinks(
+            LINKS.filter((l) => {
+              if (l.href === "/admin/nurseries") return allowed.has("nurseries");
+              if (l.href === "/admin/taxonomy") return allowed.has("taxonomy");
+              if (l.href === "/admin/orders") return allowed.has("orders");
+              if (l.href === "/admin/audit") return allowed.has("audit");
+              return true;
+            })
+          );
+        }
+      })
+      .catch(() => {
+        // cosmetic only — the API gates are the security
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function logout() {
     if (busy) {
@@ -213,7 +252,7 @@ export function AdminNav() {
           </span>
         </Link>
         <nav className="ml-2 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm">
-          {LINKS.map((l) => (
+          {links.map((l) => (
             <Link
               key={l.href}
               href={l.href}

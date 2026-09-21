@@ -15,7 +15,7 @@ export async function GET() {
   async function load() {
     return db.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, phone: true, role: true, city: true, pincode: true },
+      select: { id: true, name: true, phone: true, role: true, city: true, pincode: true, permissions: true },
     });
   }
 
