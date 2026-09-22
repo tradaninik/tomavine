@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdminScope } from "@/lib/permissions";
 
 // ─────────────────────────────────────────────────────────────
 // Admin taxonomy console — single-term API.
@@ -38,14 +38,11 @@ function jsonUpdate(value: Record<string, string | number | boolean> | null) {
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("taxonomy");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const adminId = session.payload.sub;
-  if (!adminId) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const adminId = gate.adminId;
   const { id } = await ctx.params;
   const parsed = PatchBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

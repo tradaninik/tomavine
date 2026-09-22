@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdminScope } from "@/lib/permissions";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("audit");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const logs = await db.auditLog.findMany({

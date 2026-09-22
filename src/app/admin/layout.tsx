@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { AdminNav } from "./ui";
 import { getSession } from "@/lib/security";
+import { isAdminRole } from "@/lib/permissions";
 
 const display = Fraunces({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-display" });
 const body = Karla({ subsets: ["latin"], variable: "--font-body" });
@@ -17,7 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (!session) {
     redirect("/login");
   }
-  if (String(session.payload.role) !== "ADMIN") {
+  if (!isAdminRole(String(session.payload.role))) {
     redirect("/");
   }
   return (

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdminScope } from "@/lib/permissions";
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("nurseries");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const status = new URL(req.url).searchParams.get("status");

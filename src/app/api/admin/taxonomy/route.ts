@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdminScope } from "@/lib/permissions";
 import { TAXONOMY_KINDS, KIND_META, isTaxonomyKind, ensureTaxonomySeeded } from "@/lib/taxonomy";
 
 // ─────────────────────────────────────────────────────────────
@@ -30,8 +30,8 @@ const CreateBody = z.object({
 });
 
 export async function GET() {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("taxonomy");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   await ensureTaxonomySeeded();
@@ -51,14 +51,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("taxonomy");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const adminId = session.payload.sub;
-  if (!adminId) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const adminId = gate.adminId;
   const parsed = CreateBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });

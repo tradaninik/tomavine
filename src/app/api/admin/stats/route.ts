@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdmin } from "@/lib/permissions";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdmin();
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const [nurseries, orders, users, leads, revenue] = await Promise.all([

@@ -78,7 +78,7 @@ export default function LoginPage() {
       }
 
       let dest = "/";
-      if (data.role === "ADMIN") {
+      if (data.role === "ADMIN" || data.role === "SUPER_ADMIN") {
         dest = "/admin";
       } else if (data.role === "SELLER") {
         dest = "/seller";

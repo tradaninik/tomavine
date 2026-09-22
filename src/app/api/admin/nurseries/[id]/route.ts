@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/security";
+import { requireAdminScope } from "@/lib/permissions";
 
 const Body = z.object({ action: z.enum(["verify", "reject"]) });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || String(session.payload.role) !== "ADMIN") {
+  const gate = await requireAdminScope("nurseries");
+  if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const adminId = session.payload.sub;
-  if (!adminId) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const adminId = gate.adminId;
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
