@@ -271,8 +271,8 @@ function Landing() {
               {t("sell_title")}
             </h2>
             <p className="mt-3 max-w-xl text-sm text-[#66735F]">{t("sell_s")}</p>
-            <Btn href="/login" size="lg" className="mt-6">
-              {t("nursery_login")}
+            <Btn href="/sell" size="lg" className="mt-6">
+              {t("list_your_nursery")}
             </Btn>
           </div>
         </section>
