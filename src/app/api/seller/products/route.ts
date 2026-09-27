@@ -13,6 +13,13 @@ export async function GET() {
 
   const { nursery } = auth;
 
+  const settingsRow = await db.nursery.findUnique({
+    where: { id: nursery.id },
+    select: { categories: true },
+  });
+  const rawCats = settingsRow ? settingsRow.categories : null;
+  const allowedCategories = Array.isArray(rawCats) ? (rawCats as string[]) : null;
+
   const products = await db.product.findMany({
     where: { nurseryId: nursery.id },
     orderBy: { createdAt: "asc" },
@@ -22,7 +29,7 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ products: products });
+  return NextResponse.json({ products: products, allowedCategories: allowedCategories });
 }
 
 export async function PATCH(request: Request) {
@@ -205,6 +212,20 @@ export async function POST(request: Request) {
 
   if (!CREATE_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: "Category must be plants, saplings, inputs, pots or tools" }, { status: 400 });
+  }
+
+  // Category allow-list (4c-2): null means the nursery may sell in
+  // every category; an explicit array is an exact allow-list set by
+  // the super admin in the nursery settings editor.
+  const allowedRow = await db.nursery.findUnique({
+    where: { id: nursery.id },
+    select: { categories: true },
+  });
+  const rawAllowed = allowedRow ? allowedRow.categories : null;
+  const allowed = Array.isArray(rawAllowed) ? (rawAllowed as string[]) : null;
+
+  if (allowed !== null && !allowed.includes(category)) {
+    return NextResponse.json({ error: "Your nursery does not sell in this category yet — contact Tomavine support to enable it" }, { status: 400 });
   }
 
   const nameEn = typeof body.nameEn === "string" ? body.nameEn.trim() : "";

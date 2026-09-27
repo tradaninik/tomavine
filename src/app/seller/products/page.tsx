@@ -73,6 +73,14 @@ const AGRI_LABELS: Record<string, string> = {
   form: "Form",
 };
 
+const ALL_CATS: { v: string; label: string; plain: string }[] = [
+  { v: "plants", label: "🪴 Plants", plain: "plants" },
+  { v: "saplings", label: "🌾 Saplings", plain: "saplings" },
+  { v: "inputs", label: "🧪 Inputs", plain: "organic inputs" },
+  { v: "pots", label: "🏺 Pots", plain: "pots" },
+  { v: "tools", label: "🛠️ Tools", plain: "tools" },
+];
+
 function trayLabel(traySize: string): string {
   const m = /(\d+)/.exec(traySize);
   return m ? `Tray of ${m[1]}` : traySize;
@@ -120,6 +128,7 @@ export default function SellerProductsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createOk, setCreateOk] = useState("");
+  const [allowedCats, setAllowedCats] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,6 +140,7 @@ export default function SellerProductsPage() {
 
       const data = await res.json();
       setProducts(data.products);
+      setAllowedCats(Array.isArray(data.allowedCategories) ? data.allowedCategories : null);
       setError("");
     } catch {
       setError("Could not load products.");
@@ -142,6 +152,21 @@ export default function SellerProductsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // If the nursery's allow-list was restricted while the form was
+  // open and no longer covers the selected category, fall back to
+  // the first allowed category.
+  useEffect(() => {
+    if (allowedCats !== null && allowedCats.length > 0 && !allowedCats.includes(newCat)) {
+      setNewCat(allowedCats[0]);
+      setNewVariety("");
+      setNewPlantType("");
+      setNewSize("");
+      setNewInputTerm("");
+      setNewNames({});
+      setNewAgri(null);
+    }
+  }, [allowedCats, newCat]);
 
   async function patch(id: string, payload: Record<string, unknown>) {
     setBusyId(id);
@@ -408,6 +433,8 @@ export default function SellerProductsPage() {
     }
   }
 
+  const catOptions = allowedCats === null ? ALL_CATS : ALL_CATS.filter((c) => allowedCats.includes(c.v));
+
   if (loading && products.length === 0) {
     return <p className="text-[#1C3A2A]/60">Loading…</p>;
   }
@@ -433,12 +460,17 @@ export default function SellerProductsPage() {
                 value={newCat}
                 onChange={(e) => changeCat(e.target.value)}
               >
-                <option value="plants">🪴 Plants</option>
-                <option value="saplings">🌾 Saplings</option>
-                <option value="inputs">🧪 Inputs</option>
-                <option value="pots">🏺 Pots</option>
-                <option value="tools">🛠️ Tools</option>
+                {catOptions.map((c) => (
+                  <option key={c.v} value={c.v}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
+              {allowedCats !== null ? (
+                <span className="mt-1 block text-xs text-[#66735F]">
+                  Your nursery currently lists: {catOptions.map((c) => c.plain).join(", ")}.
+                </span>
+              ) : null}
             </label>
 
             <label className="text-sm font-medium text-[#1C3A2A]">
