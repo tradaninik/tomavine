@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { LangPill, LangProvider, useLang } from "@/lib/i18n";
 import { Btn, ProductTile, StarRow } from "@/app/shop/ui";
+import { CART_EVENT, cartCount, loadCart } from "@/lib/cart";
 import type { ProductCard } from "@/lib/catalog";
 
 const display = Fraunces({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-display" });
@@ -45,6 +46,7 @@ function Landing() {
   const [nurseries, setNurseries] = useState<NurseryCard[]>([]);
   const [user, setUser] = useState<NavUser | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [cartN, setCartN] = useState(0);
 
   useEffect(() => {
     fetch("/api/catalog/products")
@@ -78,6 +80,13 @@ function Landing() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setCartN(cartCount(loadCart()));
+    refresh();
+    window.addEventListener(CART_EVENT, refresh);
+    return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
 
   function submitSearch(e: FormEvent<HTMLFormElement>) {
@@ -140,6 +149,18 @@ function Landing() {
                 {t("login")}
               </Link>
             )}
+            <Link
+              href="/shop/cart"
+              className="relative inline-flex items-center gap-2 rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]"
+            >
+              <span aria-hidden="true">🛒</span>
+              <span className="hidden sm:inline">{t("cart")}</span>
+              {cartN > 0 ? (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E39B2D] px-1 text-xs font-bold text-[#1C3A2A]">
+                  {cartN}
+                </span>
+              ) : null}
+            </Link>
           </div>
         </div>
       </header>
