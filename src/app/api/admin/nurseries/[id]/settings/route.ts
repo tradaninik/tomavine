@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/permissions";
+
+const CATEGORY_VALUES = ["plants", "saplings", "inputs", "pots", "tools"] as const;
 
 const SettingsBody = z.object({
   name: z.string().trim().min(2).max(120),
@@ -15,11 +18,15 @@ const SettingsBody = z.object({
   retailOk: z.boolean(),
   bulkOk: z.boolean(),
   growArea: z.string().trim().max(200).nullable(),
+  categories: z.array(z.enum(CATEGORY_VALUES)).nullable(),
 });
 
 // PATCH /api/admin/nurseries/[id]/settings — SUPER_ADMIN edits a nursery's
 // details. Status keeps its dedicated verify/reject route; slug is the public
-// URL identity and never changes here. One audit entry per real change.
+// URL identity and never changes here. Categories: null means all five are
+// allowed (the default for every pre-existing nursery); an explicit array is
+// an exact allow-list. All five ticked is saved as null. One audit entry per
+// real change.
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const gate = await requireSuperAdmin();
   if (!gate.ok) {
@@ -38,6 +45,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (body.scope === "RADIUS" && body.scopeKm === null) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
+  if (body.categories !== null && body.categories.length === 0) {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
   const nursery = await db.nursery.findUnique({ where: { id: id } });
   if (!nursery) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -46,6 +56,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const gstin = body.gstin.toUpperCase();
   const scopeKm = body.scope === "RADIUS" ? body.scopeKm : null;
   const growArea = body.growArea !== null && body.growArea.length > 0 ? body.growArea : null;
+  const uniqueCats = body.categories !== null ? Array.from(new Set(body.categories)) : null;
+  const categories = uniqueCats !== null && uniqueCats.length === CATEGORY_VALUES.length ? null : uniqueCats;
+
+  const beforeCats =
+    nursery.categories === null ? null : JSON.stringify((nursery.categories as string[]).slice().sort());
+  const afterCats = categories === null ? null : JSON.stringify(categories.slice().sort());
 
   const changed: string[] = [];
   if (nursery.name !== body.name) changed.push("name");
@@ -59,6 +75,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (nursery.retailOk !== body.retailOk) changed.push("retailOk");
   if (nursery.bulkOk !== body.bulkOk) changed.push("bulkOk");
   if (nursery.growArea !== growArea) changed.push("growArea");
+  if (beforeCats !== afterCats) changed.push("categories");
 
   if (changed.length === 0) {
     return NextResponse.json({ ok: true, changed: [] });
@@ -79,6 +96,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         retailOk: body.retailOk,
         bulkOk: body.bulkOk,
         growArea: growArea,
+        categories: categories !== null ? (categories as Prisma.InputJsonValue) : Prisma.DbNull,
       },
     });
     await tx.auditLog.create({
@@ -91,6 +109,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           slug: nursery.slug,
           city: body.city,
           changed: changed.join(", "),
+          categories: categories === null ? "all" : categories.join(", "),
           source: "admin",
         },
       },

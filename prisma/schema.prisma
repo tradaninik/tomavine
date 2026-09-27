@@ -88,6 +88,7 @@ model Nursery {
   status         VerificationStatus @default(PENDING)
   physVerifiedAt DateTime?
   growArea       String?
+  categories     Json?
   ratingAvg      Float    @default(0)
   products       Product[]
   services       ServiceListing[]

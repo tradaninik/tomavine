@@ -22,6 +22,7 @@ type NurseryRow = {
   status: string;
   physVerifiedAt: string | null;
   growArea: string | null;
+  categories: string[] | null;
   ratingAvg: number;
   productCount: number;
   ownerName: string | null;
@@ -58,6 +59,7 @@ type EditForm = {
   retailOk: boolean;
   bulkOk: boolean;
   growArea: string;
+  categories: string[];
 };
 
 const EMPTY_ONBOARD: OnboardForm = {
@@ -83,6 +85,16 @@ const SCOPE_OPTIONS = [
   { value: "INDIA", label: "Ships across India" },
 ];
 
+const CATEGORIES: { v: string; label: string }[] = [
+  { v: "plants", label: "Plants" },
+  { v: "saplings", label: "Saplings" },
+  { v: "inputs", label: "Organic inputs" },
+  { v: "pots", label: "Pots" },
+  { v: "tools", label: "Tools" },
+];
+
+const ALL_CATEGORY_VALUES = ["plants", "saplings", "inputs", "pots", "tools"];
+
 const TABS = ["all", "PENDING", "VERIFIED", "REJECTED"] as const;
 
 function scopeText(row: NurseryRow): string {
@@ -99,6 +111,13 @@ function scopeText(row: NurseryRow): string {
     return row.scopeKm ? `~${row.scopeKm} km around ${row.city}` : `Local around ${row.city}`;
   }
   return row.scope;
+}
+
+function categoriesText(row: NurseryRow): string {
+  if (row.categories === null) {
+    return "All five categories";
+  }
+  return row.categories.join(", ");
 }
 
 function tabCls(active: boolean): string {
@@ -296,6 +315,7 @@ export default function AdminNurseriesPage() {
       retailOk: n.retailOk,
       bulkOk: n.bulkOk,
       growArea: n.growArea ?? "",
+      categories: n.categories === null ? [...ALL_CATEGORY_VALUES] : n.categories.filter((c) => ALL_CATEGORY_VALUES.includes(c)),
     });
     setEditError("");
     setEditOk("");
@@ -303,6 +323,17 @@ export default function AdminNurseriesPage() {
 
   function setEditField<K extends keyof EditForm>(key: K, value: EditForm[K]) {
     setEdit((f) => (f ? { ...f, [key]: value } : f));
+  }
+
+  function toggleCategory(v: string) {
+    setEdit((f) => {
+      if (!f) {
+        return f;
+      }
+      const has = f.categories.includes(v);
+      const next = has ? f.categories.filter((c) => c !== v) : [...f.categories, v];
+      return { ...f, categories: next };
+    });
   }
 
   function validateEdit(): string[] {
@@ -321,6 +352,7 @@ export default function AdminNurseriesPage() {
       if (!Number.isInteger(km) || km < 1 || km > 100) problems.push("Delivery radius — a whole number of km between 1 and 100.");
     }
     if (!edit.retailOk && !edit.bulkOk) problems.push("Sells — enable retail, bulk, or both.");
+    if (edit.categories.length === 0) problems.push("Categories — enable at least one.");
     return problems;
   }
 
@@ -353,6 +385,7 @@ export default function AdminNurseriesPage() {
           retailOk: edit.retailOk,
           bulkOk: edit.bulkOk,
           growArea: edit.growArea.trim().length > 0 ? edit.growArea.trim() : null,
+          categories: edit.categories.length === ALL_CATEGORY_VALUES.length ? null : edit.categories,
         }),
       });
       const data = await res.json();
@@ -651,6 +684,10 @@ export default function AdminNurseriesPage() {
                     {n.bulkOk ? <Pill tone="sky">Bulk</Pill> : null}
                     {!n.retailOk && !n.bulkOk ? <Pill tone="rose">Nothing</Pill> : null}
                   </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Categories allowed</p>
+                    <p className="mt-0.5 text-[#20291D]">{categoriesText(n)}</p>
+                  </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-[#E4E0CE] pt-4">
@@ -792,6 +829,24 @@ export default function AdminNurseriesPage() {
                           onChange={(e) => setEditField("growArea", e.target.value)}
                         />
                       </label>
+                      <div className="sm:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Categories this nursery may sell</span>
+                        <p className="mt-1 text-xs text-[#8E9A84]">
+                          All five ticked = no restriction (the default). Untick to restrict — sellers of a restricted nursery will only be able to list products in the ticked categories (enforcement ships in the next wave).
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#20291D]">
+                          {CATEGORIES.map((c) => (
+                            <label key={c.v} className="inline-flex cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={edit.categories.includes(c.v)}
+                                onChange={() => toggleCategory(c.v)}
+                              />
+                              {c.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     {editError ? <ErrBox>{editError}</ErrBox> : null}

@@ -34,6 +34,7 @@ export async function GET(req: Request) {
       status: n.status,
       physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
       growArea: n.growArea,
+      categories: n.categories,
       ratingAvg: n.ratingAvg,
       productCount: n._count.products,
       ownerName: n.owner.name,
