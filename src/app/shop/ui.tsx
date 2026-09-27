@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { CART_EVENT, addToCart, cartCount, loadCart } from "@/lib/cart";
 import { LangPill, displayName, useLang } from "@/lib/i18n";
@@ -356,6 +356,16 @@ export function ProductTile({ p }: { p: ProductCard }) {
   const { lang, t } = useLang();
   const name = displayName(p.names, lang, p.nameEn);
   const displayPrice = p.rescue ? Math.round(p.priceMin * (1 - p.rescue.pct / 100)) : p.priceMin;
+  const [added, setAdded] = useState(false);
+  const flashTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current !== null) {
+        window.clearTimeout(flashTimer.current);
+      }
+    };
+  }, []);
 
   function quickAdd() {
     if (p.stock <= 0) {
@@ -364,7 +374,12 @@ export function ProductTile({ p }: { p: ProductCard }) {
     const variantId = p.variants.length > 0 ? p.variants[0].id : null;
     const res = addToCart(p.id, variantId, 1);
     if (res.ok) {
-      toast(`${name} · ${t("added")}`);
+      // Confirm right where the click happened — the button itself flashes.
+      setAdded(true);
+      if (flashTimer.current !== null) {
+        window.clearTimeout(flashTimer.current);
+      }
+      flashTimer.current = window.setTimeout(() => setAdded(false), 1600);
     } else if (res.reason) {
       toast(res.reason);
     }
@@ -408,8 +423,8 @@ export function ProductTile({ p }: { p: ProductCard }) {
           <Link href={`/shop/nursery/${p.nurserySlug}`} className="truncate text-xs font-semibold text-[#2F6B3F] hover:underline">
             {p.nurseryName} · {p.nurseryCity}
           </Link>
-          <Btn onClick={quickAdd} disabled={p.stock <= 0} size="sm" className="w-full">
-            🛒 {t("add_to_cart")}
+          <Btn onClick={quickAdd} disabled={p.stock <= 0} size="sm" variant={added ? "forest" : "primary"} className="w-full">
+            {added ? `✓ ${t("added")}` : `🛒 ${t("add_to_cart")}`}
           </Btn>
         </div>
       </div>
