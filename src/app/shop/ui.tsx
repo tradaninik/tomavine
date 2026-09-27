@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { CART_EVENT, addToCart, cartCount, loadCart } from "@/lib/cart";
+import { CART_EVENT, MAX_QTY, addToCart, cartCount, loadCart, setQty } from "@/lib/cart";
 import { LangPill, displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 
@@ -356,33 +356,42 @@ export function ProductTile({ p }: { p: ProductCard }) {
   const { lang, t } = useLang();
   const name = displayName(p.names, lang, p.nameEn);
   const displayPrice = p.rescue ? Math.round(p.priceMin * (1 - p.rescue.pct / 100)) : p.priceMin;
-  const [added, setAdded] = useState(false);
-  const flashTimer = useRef<number | null>(null);
+  const variantId = p.variants.length > 0 ? p.variants[0].id : null;
+  const cap = Math.min(p.stock, MAX_QTY);
+
+  // Cart state is read only in effects/handlers (SSR has no localStorage)
+  // and kept fresh on every tile via the global cart event.
+  const [qty, setQtyValue] = useState(0);
 
   useEffect(() => {
-    return () => {
-      if (flashTimer.current !== null) {
-        window.clearTimeout(flashTimer.current);
-      }
+    const refresh = () => {
+      const line = loadCart().find((l) => l.productId === p.id && l.variantId === variantId);
+      setQtyValue(line ? line.qty : 0);
     };
-  }, []);
+    refresh();
+    window.addEventListener(CART_EVENT, refresh);
+    return () => window.removeEventListener(CART_EVENT, refresh);
+  }, [p.id, variantId]);
 
-  function quickAdd() {
+  function handleFirstAdd() {
     if (p.stock <= 0) {
       return;
     }
-    const variantId = p.variants.length > 0 ? p.variants[0].id : null;
     const res = addToCart(p.id, variantId, 1);
-    if (res.ok) {
-      // Confirm right where the click happened — the button itself flashes.
-      setAdded(true);
-      if (flashTimer.current !== null) {
-        window.clearTimeout(flashTimer.current);
-      }
-      flashTimer.current = window.setTimeout(() => setAdded(false), 1600);
-    } else if (res.reason) {
+    if (!res.ok && res.reason) {
       toast(res.reason);
     }
+  }
+
+  function stepUp() {
+    if (qty >= cap) {
+      return;
+    }
+    setQty(p.id, variantId, qty + 1);
+  }
+
+  function stepDown() {
+    setQty(p.id, variantId, qty - 1);
   }
 
   return (
@@ -423,9 +432,36 @@ export function ProductTile({ p }: { p: ProductCard }) {
           <Link href={`/shop/nursery/${p.nurserySlug}`} className="truncate text-xs font-semibold text-[#2F6B3F] hover:underline">
             {p.nurseryName} · {p.nurseryCity}
           </Link>
-          <Btn onClick={quickAdd} disabled={p.stock <= 0} size="sm" variant={added ? "forest" : "primary"} className="w-full">
-            {added ? `✓ ${t("added")}` : `🛒 ${t("add_to_cart")}`}
-          </Btn>
+          {p.stock <= 0 ? (
+            <Btn size="sm" disabled className="w-full">
+              🛒 {t("add_to_cart")}
+            </Btn>
+          ) : qty > 0 ? (
+            <div className="flex w-full items-center justify-between rounded-xl bg-[#2F6B3F] text-white transition hover:bg-[#24562F]">
+              <button
+                type="button"
+                onClick={stepDown}
+                aria-label="Remove one"
+                className="grid h-9 w-10 place-items-center rounded-xl text-lg font-bold leading-none hover:bg-white/15"
+              >
+                −
+              </button>
+              <span className="min-w-8 text-center text-sm font-bold tabular-nums">{qty}</span>
+              <button
+                type="button"
+                onClick={stepUp}
+                disabled={qty >= cap}
+                aria-label="Add one"
+                className="grid h-9 w-10 place-items-center rounded-xl text-lg font-bold leading-none hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <Btn onClick={handleFirstAdd} size="sm" className="w-full">
+              🛒 {t("add_to_cart")}
+            </Btn>
+          )}
         </div>
       </div>
     </div>
