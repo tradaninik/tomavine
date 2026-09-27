@@ -52,6 +52,7 @@ const ok = auditOk && smokeOk;
 console.log("\n──────── GATE VERDICT ────────");
 console.log(auditCounts || "Audit counts: (not found)");
 console.log(lineContaining(smoke.out, "Taxonomy") || "Taxonomy: (not found)");
+console.log(lineContaining(smoke.out, "Product catalog") || "Product catalog: (not found)");
 console.log(lineContaining(smoke.out, "Nursery catalog") || "Nursery catalog: (not found)");
 console.log("");
 if (!auditOk) {
