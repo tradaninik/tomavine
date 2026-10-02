@@ -132,3 +132,78 @@ export async function PATCH(req: Request) {
     },
   });
 }
+
+// POST /api/admin/users — SUPER_ADMIN creates a staff ADMIN account
+// (name + phone; the person signs in with OTP like everyone else).
+// permissions: null/omitted = never managed (= all scopes); an
+// explicit array is the exact allow-list (empty is rejected here —
+// a genuine no-scope admin is an edit away, not a creation).
+// One transaction: User create + AuditLog user.create. 409 if the
+// phone already has an account (users are per-phone, one role).
+const CreateBody = z.object({
+  name: z.string().trim().min(2).max(80),
+  phone: z.string().trim().regex(/^\+91[6-9]\d{9}$/),
+  permissions: z.array(z.string().refine(isAdminScope)).nullable().optional(),
+});
+
+export async function POST(req: Request) {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const adminId = gate.adminId;
+  const parsed = CreateBody.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
+  const { name, phone, permissions } = parsed.data;
+  if (permissions !== null && permissions !== undefined && permissions.length === 0) {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
+  const existing = await db.user.findUnique({ where: { phone } });
+  if (existing) {
+    return NextResponse.json({ error: "exists" }, { status: 409 });
+  }
+  const perms = permissions ?? null;
+  const created = await db.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        name,
+        phone,
+        role: "ADMIN",
+        ...(perms === null ? {} : { permissions: perms as Prisma.InputJsonValue }),
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "user.create",
+        entity: `User:${user.id}`,
+        meta: {
+          phone,
+          name,
+          role: "ADMIN",
+          permissions: perms,
+          source: "admin",
+        },
+      },
+    });
+    return user;
+  });
+  return NextResponse.json(
+    {
+      ok: true,
+      user: {
+        id: created.id,
+        name: created.name,
+        phone: created.phone,
+        role: created.role,
+        city: created.city,
+        pincode: created.pincode,
+        permissions: created.permissions,
+        createdAt: created.createdAt.toISOString(),
+      },
+    },
+    { status: 201 }
+  );
+}
