@@ -2,29 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card, ErrBox, Loading, Pill, Stat, Btn, inr } from "./ui";
+import { Card, Empty, ErrBox, Loading, Pill, Stat, Btn, inr } from "./ui";
 
 type StatusCount = { status: string; count: number };
 type RoleCount = { role: string; count: number };
 
 type Stats = {
-  nurseries: StatusCount[];
-  orders: StatusCount[];
-  users: RoleCount[];
-  leads: StatusCount[];
-  revenueDelivered: number;
+  nurseries: StatusCount[] | null;
+  orders: StatusCount[] | null;
+  users: RoleCount[] | null;
+  leads: StatusCount[] | null;
+  revenueDelivered: number | null;
 };
 
-function sc(list: StatusCount[], key: string): number {
-  return list.find((x) => x.status === key)?.count ?? 0;
+function sc(list: StatusCount[] | null, key: string): number {
+  return list?.find((x) => x.status === key)?.count ?? 0;
 }
 
-function rc(list: RoleCount[], key: string): number {
-  return list.find((x) => x.role === key)?.count ?? 0;
+function rc(list: RoleCount[] | null, key: string): number {
+  return list?.find((x) => x.role === key)?.count ?? 0;
 }
 
-function total(list: { count: number }[]): number {
-  return list.reduce((sum, x) => sum + x.count, 0);
+function total(list: { count: number }[] | null): number {
+  return list?.reduce((sum, x) => sum + x.count, 0) ?? 0;
 }
 
 export default function AdminOverviewPage() {
@@ -71,6 +71,12 @@ export default function AdminOverviewPage() {
   }
 
   const pendingNurseries = sc(stats.nurseries, "PENDING");
+  const anySection =
+    stats.nurseries !== null ||
+    stats.orders !== null ||
+    stats.users !== null ||
+    stats.leads !== null ||
+    stats.revenueDelivered !== null;
 
   return (
     <div className="space-y-6">
@@ -78,73 +84,105 @@ export default function AdminOverviewPage() {
         Overview
       </h1>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <Stat label="Nurseries" value={String(total(stats.nurseries))} hint={`${sc(stats.nurseries, "VERIFIED")} verified`} />
-        <Stat
-          label="Pending verification"
-          value={String(pendingNurseries)}
-          hint={pendingNurseries > 0 ? "Needs your action" : "All clear"}
+      {!anySection ? (
+        <Empty
+          emoji="🛡️"
+          title="No dashboard sections for your access level"
+          text="Your admin account doesn't include any overview sections yet — use the sidebar to reach the areas you can work in, or ask the founder to widen your scopes."
         />
-        <Stat label="Orders" value={String(total(stats.orders))} hint={`${sc(stats.orders, "DELIVERED")} delivered`} />
-        <Stat label="Users" value={String(total(stats.users))} hint={`${rc(stats.users, "SELLER")} sellers`} />
-        <Stat label="New leads" value={String(sc(stats.leads, "new"))} hint={`${sc(stats.leads, "quoted")} quoted`} />
-        <Stat label="Delivered revenue" value={inr(stats.revenueDelivered)} hint="COD orders marked delivered" />
-        <Stat label="Rejected nurseries" value={String(sc(stats.nurseries, "REJECTED"))} />
-      </div>
-
-      {pendingNurseries > 0 ? (
-        <Card className="border-amber-300 bg-amber-50">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-amber-800">
-              🚨 {pendingNurseries} nursery{pendingNurseries > 1 ? "ies" : ""} waiting for physical verification.
-            </p>
-            <Btn href="/admin/nurseries" size="sm">
-              Open queue →
-            </Btn>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {stats.nurseries !== null ? (
+              <>
+                <Stat
+                  label="Nurseries"
+                  value={String(total(stats.nurseries))}
+                  hint={`${sc(stats.nurseries, "VERIFIED")} verified`}
+                />
+                <Stat
+                  label="Pending verification"
+                  value={String(pendingNurseries)}
+                  hint={pendingNurseries > 0 ? "Needs your action" : "All clear"}
+                />
+                <Stat label="Rejected nurseries" value={String(sc(stats.nurseries, "REJECTED"))} />
+              </>
+            ) : null}
+            {stats.orders !== null ? (
+              <Stat label="Orders" value={String(total(stats.orders))} hint={`${sc(stats.orders, "DELIVERED")} delivered`} />
+            ) : null}
+            {stats.users !== null ? (
+              <Stat label="Users" value={String(total(stats.users))} hint={`${rc(stats.users, "SELLER")} sellers`} />
+            ) : null}
+            {stats.leads !== null ? (
+              <Stat label="New leads" value={String(sc(stats.leads, "new"))} hint={`${sc(stats.leads, "quoted")} quoted`} />
+            ) : null}
+            {stats.revenueDelivered !== null ? (
+              <Stat label="Delivered revenue" value={inr(stats.revenueDelivered)} hint="COD orders marked delivered" />
+            ) : null}
           </div>
-        </Card>
-      ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#20291D]">Order pipeline</h2>
-            <Link href="/admin/orders" className="text-sm font-bold text-[#2F6B3F] hover:underline">
-              View orders →
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {stats.orders.length === 0 ? (
-              <p className="text-sm text-[#66735F]">No orders yet.</p>
-            ) : (
-              stats.orders.map((o) => (
-                <div key={o.status} className="flex items-center justify-between gap-2 text-sm">
-                  <Pill tone="cream">{o.status.replaceAll("_", " ")}</Pill>
-                  <span className="font-bold text-[#20291D]">{o.count}</span>
+          {stats.nurseries !== null && pendingNurseries > 0 ? (
+            <Card className="border-amber-300 bg-amber-50">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-amber-800">
+                  🚨 {pendingNurseries} nursery{pendingNurseries > 1 ? "ies" : ""} waiting for physical verification.
+                </p>
+                <Btn href="/admin/nurseries" size="sm">
+                  Open queue →
+                </Btn>
+              </div>
+            </Card>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {stats.orders !== null ? (
+              <Card>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-[#20291D]">Order pipeline</h2>
+                  <Link href="/admin/orders" className="text-sm font-bold text-[#2F6B3F] hover:underline">
+                    View orders →
+                  </Link>
                 </div>
-              ))
-            )}
-          </div>
-        </Card>
+                <div className="space-y-2">
+                  {stats.orders.length === 0 ? (
+                    <p className="text-sm text-[#66735F]">No orders yet.</p>
+                  ) : (
+                    stats.orders.map((o) => (
+                      <div key={o.status} className="flex items-center justify-between gap-2 text-sm">
+                        <Pill tone="cream">{o.status.replaceAll("_", " ")}</Pill>
+                        <span className="font-bold text-[#20291D]">{o.count}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            ) : null}
 
-        <Card>
-          <h2 className="mb-3 text-lg font-semibold text-[#20291D]">Users & leads</h2>
-          <div className="space-y-2">
-            {stats.users.map((u) => (
-              <div key={u.role} className="flex items-center justify-between gap-2 text-sm">
-                <Pill tone="sky">{u.role}</Pill>
-                <span className="font-bold text-[#20291D]">{u.count}</span>
-              </div>
-            ))}
-            {stats.leads.map((l) => (
-              <div key={l.status} className="flex items-center justify-between gap-2 text-sm">
-                <Pill tone="amber">lead · {l.status}</Pill>
-                <span className="font-bold text-[#20291D]">{l.count}</span>
-              </div>
-            ))}
+            {stats.users !== null ? (
+              <Card>
+                <h2 className="mb-3 text-lg font-semibold text-[#20291D]">Users & leads</h2>
+                <div className="space-y-2">
+                  {stats.users.map((u) => (
+                    <div key={u.role} className="flex items-center justify-between gap-2 text-sm">
+                      <Pill tone="sky">{u.role}</Pill>
+                      <span className="font-bold text-[#20291D]">{u.count}</span>
+                    </div>
+                  ))}
+                  {stats.leads !== null
+                    ? stats.leads.map((l) => (
+                        <div key={l.status} className="flex items-center justify-between gap-2 text-sm">
+                          <Pill tone="amber">lead · {l.status}</Pill>
+                          <span className="font-bold text-[#20291D]">{l.count}</span>
+                        </div>
+                      ))
+                    : null}
+                </div>
+              </Card>
+            ) : null}
           </div>
-        </Card>
-      </div>
+        </>
+      )}
     </div>
   );
 }
