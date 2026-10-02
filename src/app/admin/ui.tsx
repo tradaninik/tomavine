@@ -7,13 +7,58 @@ import type { ReactNode } from "react";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
-const LINKS = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/nurseries", label: "Nurseries" },
-  { href: "/admin/taxonomy", label: "Taxonomy" },
-  { href: "/admin/orders", label: "Orders" },
-  { href: "/admin/audit", label: "Audit log" },
+type NavItem = { href: string; label: string };
+type NavGroup = { title: string | null; items: NavItem[] };
+type Identity = { name: string; phone: string; role: string };
+
+// The default sidebar — what renders before /api/auth/me answers.
+// This list is presentation only; every section's API route enforces
+// its own gate server-side.
+const BASE_GROUPS: NavGroup[] = [
+  { title: null, items: [{ href: "/admin", label: "Overview" }] },
+  {
+    title: "Marketplace",
+    items: [
+      { href: "/admin/nurseries", label: "Nurseries" },
+      { href: "/admin/orders", label: "Orders" },
+    ],
+  },
+  { title: "Catalog", items: [{ href: "/admin/taxonomy", label: "Taxonomy" }] },
+  { title: "System", items: [{ href: "/admin/audit", label: "Audit log" }] },
 ];
+
+const USERS_ITEM: NavItem = { href: "/admin/users", label: "Users & staff" };
+
+// SUPER_ADMIN sees every section plus Users & staff. A scoped ADMIN
+// keeps only the sections their permissions allow — a group left
+// empty disappears entirely. A never-managed ADMIN (null) keeps all
+// base sections. The API gates are the real security; this menu just
+// tells the same truth.
+function groupsForRole(role: string, permissions: string[] | null): NavGroup[] {
+  if (role === "SUPER_ADMIN") {
+    return BASE_GROUPS.map((g) =>
+      g.title === "System" ? { ...g, items: [...g.items, USERS_ITEM] } : g
+    );
+  }
+  if (role !== "ADMIN" || permissions === null) {
+    return BASE_GROUPS;
+  }
+  const allowed = new Set(permissions);
+  const visible: NavGroup[] = [];
+  for (const g of BASE_GROUPS) {
+    const items = g.items.filter((l) => {
+      if (l.href === "/admin/nurseries") return allowed.has("nurseries");
+      if (l.href === "/admin/taxonomy") return allowed.has("taxonomy");
+      if (l.href === "/admin/orders") return allowed.has("orders");
+      if (l.href === "/admin/audit") return allowed.has("audit");
+      return true;
+    });
+    if (items.length > 0) {
+      visible.push({ title: g.title, items });
+    }
+  }
+  return visible;
+}
 
 export function inr(n: number): string {
   return "₹" + n.toLocaleString("en-IN");
@@ -187,11 +232,14 @@ export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  // Tabs render from the default list immediately, then adjust
-  // once /api/auth/me says who's logged in: SUPER_ADMIN gains the
-  // Users tab; a scoped ADMIN loses tabs they lack. An ADMIN whose
-  // permissions were never managed (null) keeps every tab.
-  const [links, setLinks] = useState(LINKS);
+  // The sidebar renders the default groups immediately, then adjusts
+  // once /api/auth/me says who's logged in: SUPER_ADMIN gains
+  // Users & staff; a scoped ADMIN loses sections they lack. An ADMIN
+  // whose permissions were never managed (null) keeps every base
+  // section. Below lg the sidebar collapses into a top strip with
+  // the links laid out flat.
+  const [groups, setGroups] = useState<NavGroup[]>(BASE_GROUPS);
+  const [identity, setIdentity] = useState<Identity | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -202,22 +250,13 @@ export function AdminNav() {
           return;
         }
         const role = String(d.user.role);
-        if (role === "SUPER_ADMIN") {
-          setLinks([...LINKS, { href: "/admin/users", label: "Users" }]);
-          return;
-        }
-        if (role === "ADMIN" && Array.isArray(d.user.permissions)) {
-          const allowed = new Set(d.user.permissions.map(String));
-          setLinks(
-            LINKS.filter((l) => {
-              if (l.href === "/admin/nurseries") return allowed.has("nurseries");
-              if (l.href === "/admin/taxonomy") return allowed.has("taxonomy");
-              if (l.href === "/admin/orders") return allowed.has("orders");
-              if (l.href === "/admin/audit") return allowed.has("audit");
-              return true;
-            })
-          );
-        }
+        const perms = d.user.permissions;
+        setGroups(groupsForRole(role, Array.isArray(perms) ? perms.map(String) : null));
+        setIdentity({
+          name: typeof d.user.name === "string" ? d.user.name : "",
+          phone: String(d.user.phone),
+          role,
+        });
       })
       .catch(() => {
         // cosmetic only — the API gates are the security
@@ -241,8 +280,8 @@ export function AdminNav() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b-4 border-[#2F6B3F] bg-[#1C3A2A] text-[#F7F3E8]">
-      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
+    <aside className="sticky top-0 z-40 border-b-4 border-[#2F6B3F] bg-[#1C3A2A] text-[#F7F3E8] lg:h-screen lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r-4">
+      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 lg:mx-0 lg:h-full lg:max-w-none lg:flex-col lg:items-stretch lg:gap-0 lg:px-3 lg:py-5">
         <Link href="/admin" className="flex shrink-0 items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#F7F3E8] text-lg" aria-hidden="true">
             🛡️
@@ -251,36 +290,57 @@ export function AdminNav() {
             Tomavine Admin
           </span>
         </Link>
-        <nav className="ml-2 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={
-                pathname === l.href
-                  ? "whitespace-nowrap rounded-xl bg-white/15 px-3 py-2 font-semibold text-white"
-                  : "whitespace-nowrap rounded-xl px-3 py-2 font-semibold text-[#F7F3E8]/80 hover:bg-white/10 hover:text-white"
-              }
-            >
-              {l.label}
-            </Link>
+
+        <nav className="ml-2 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm lg:ml-0 lg:mt-6 lg:block lg:space-y-5 lg:overflow-visible">
+          {groups.map((group) => (
+            <div key={group.title ?? "top"} className="flex gap-1 lg:block">
+              {group.title ? (
+                <p className="hidden px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#F7F3E8]/40 lg:block">
+                  {group.title}
+                </p>
+              ) : null}
+              <div className="flex gap-1 lg:block lg:space-y-1">
+                {group.items.map((l) => (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className={
+                      pathname === l.href
+                        ? "whitespace-nowrap rounded-xl bg-white/15 px-3 py-2 font-semibold text-white"
+                        : "whitespace-nowrap rounded-xl px-3 py-2 font-semibold text-[#F7F3E8]/80 hover:bg-white/10 hover:text-white"
+                    }
+                  >
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
-        <Link
-          href="/"
-          className="shrink-0 rounded-xl bg-[#2F6B3F] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]"
-        >
-          Storefront ↗
-        </Link>
-        <button
-          type="button"
-          onClick={logout}
-          disabled={busy}
-          className="shrink-0 rounded-xl border border-[#F7F3E8]/30 px-3 py-2 text-sm font-semibold text-[#F7F3E8] transition hover:bg-white/10 disabled:opacity-50"
-        >
-          Logout
-        </button>
+
+        <div className="flex shrink-0 items-center gap-2 lg:mt-6 lg:flex-col lg:items-stretch">
+          {identity ? (
+            <div className="hidden px-3 pb-3 lg:block">
+              <p className="truncate text-sm font-semibold text-[#F7F3E8]">{identity.name || identity.phone}</p>
+              <p className="text-xs text-[#F7F3E8]/50">{identity.role.replace("_", " ")}</p>
+            </div>
+          ) : null}
+          <Link
+            href="/"
+            className="flex items-center justify-center gap-1 rounded-xl bg-[#2F6B3F] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]"
+          >
+            Storefront ↗
+          </Link>
+          <button
+            type="button"
+            onClick={logout}
+            disabled={busy}
+            className="rounded-xl border border-[#F7F3E8]/30 px-3 py-2 text-sm font-semibold text-[#F7F3E8] transition hover:bg-white/10 disabled:opacity-50"
+          >
+            Logout
+          </button>
+        </div>
       </div>
-    </header>
+    </aside>
   );
 }
