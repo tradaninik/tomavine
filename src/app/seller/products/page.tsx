@@ -38,6 +38,7 @@ type TaxTerm = {
 };
 
 type FormState = {
+  name: string;
   price: string;
   mrp: string;
   stock: string;
@@ -48,6 +49,7 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
+  name: "",
   price: "",
   mrp: "",
   stock: "",
@@ -202,6 +204,7 @@ export default function SellerProductsPage() {
   function startEdit(p: Product) {
     setEditingId(p.id);
     setForm({
+      name: p.nameEn,
       price: String(p.priceMin),
       mrp: String(p.mrp),
       stock: String(p.stock),
@@ -214,6 +217,7 @@ export default function SellerProductsPage() {
 
   async function saveEdit(p: Product) {
     const payload: Record<string, unknown> = {
+      nameEn: form.name.trim(),
       price: Number(form.price),
       mrp: Number(form.mrp),
       stock: Number(form.stock),
@@ -729,10 +733,23 @@ export default function SellerProductsPage() {
               <Btn kind="ghost" onClick={() => quickStock(p, 10)} disabled={busy}>
                 +10
               </Btn>
+              <Btn kind="ghost" onClick={() => patch(p.id, { hidden: !p.hidden })} disabled={busy}>
+                {p.hidden ? "Unhide" : "Hide"}
+              </Btn>
             </div>
 
             {editingId === p.id ? (
               <div className="mt-4 space-y-3 rounded-xl bg-[#F7F3E8] p-4">
+                <label className="block text-sm font-medium text-[#1C3A2A]">
+                  Product name
+                  <input
+                    className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    maxLength={120}
+                  />
+                </label>
+
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="text-sm font-medium text-[#1C3A2A]">
                     Price (₹)

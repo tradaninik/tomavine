@@ -43,6 +43,7 @@ export async function PATCH(request: Request) {
 
   let body: {
     id?: string;
+    nameEn?: string;
     price?: number;
     mrp?: number;
     stock?: number;
@@ -71,7 +72,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  const data: { priceMin?: number; mrp?: number; stock?: number; hidden?: boolean } = {};
+  const data: { nameEn?: string; priceMin?: number; mrp?: number; stock?: number; hidden?: boolean } = {};
+
+  if (typeof body.nameEn === "string") {
+    const name = body.nameEn.trim();
+    if (name.length < 2 || name.length > 120) {
+      return NextResponse.json({ error: "Product name must be 2–120 characters" }, { status: 400 });
+    }
+    data.nameEn = name;
+  }
 
   if (typeof body.price === "number") {
     if (!Number.isInteger(body.price) || body.price < 1) {
@@ -91,6 +100,9 @@ export async function PATCH(request: Request) {
     if (!Number.isInteger(body.stock) || body.stock < 0) {
       return NextResponse.json({ error: "Stock cannot be negative" }, { status: 400 });
     }
+    if (body.stock > 9999) {
+      return NextResponse.json({ error: "Stock cannot be more than 9,999" }, { status: 400 });
+    }
     data.stock = body.stock;
   }
 
@@ -103,6 +115,10 @@ export async function PATCH(request: Request) {
 
   if (finalPrice > finalMrp) {
     return NextResponse.json({ error: "Price cannot be higher than MRP" }, { status: 400 });
+  }
+
+  if (Object.keys(data).length === 0 && body.rescue === undefined) {
+    return NextResponse.json({ error: "Nothing to update — change at least one field" }, { status: 400 });
   }
 
   if (body.rescue === null) {
