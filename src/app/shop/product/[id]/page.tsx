@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Field, Loading, Pill, StarRow, catEmoji, formatDate, inr, inputCls, toast } from "../../ui";
 import { displayName, useLang } from "@/lib/i18n";
-import { addToCart } from "@/lib/cart";
+import { addToCart, displayPriceOf } from "@/lib/cart";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
@@ -81,7 +81,7 @@ function objEntries(x: unknown): [string, string | number][] {
 
 export default function ProductPage() {
   const params = useParams<{ id: string }>();
-  const id = typeof params.id === "string" ? params.id : "";
+  const id = typeof params?.id === "string" ? params.id : "";
   const { lang, t } = useLang();
   const [product, setProduct] = useState<Product | null>(null);
   const [me, setMe] = useState<Me>(null);
@@ -153,16 +153,15 @@ export default function ProductPage() {
     };
   }, []);
 
-  const unit = useMemo(() => {
+  // ── Display pricing (S8 Wave C): the single source in cart.ts —
+  // expiry-aware, variant-aware, and identical to what checkout
+  // charges. `before` is the pre-discount reference for the
+  // struck-through price.
+  const price = useMemo(() => {
     if (!product) {
-      return 0;
+      return { now: 0, before: 0 };
     }
-    const v = product.variants.find((x) => x.id === variantId) ?? product.variants[0] ?? null;
-    let u = v ? v.price : product.priceMin;
-    if (product.rescue) {
-      u = Math.round(u * (1 - product.rescue.pct / 100));
-    }
-    return u;
+    return displayPriceOf(product, variantId);
   }, [product, variantId]);
 
   if (loading) {
@@ -315,8 +314,12 @@ export default function ProductPage() {
           ) : null}
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-3xl font-bold text-[#1C3A2A]">{inr(unit)}</span>
-            {product.mrp > unit ? <span className="text-sm text-[#8E9A84] line-through">{inr(product.mrp)}</span> : null}
+            <span className="text-3xl font-bold text-[#1C3A2A]">{inr(price.now)}</span>
+            {price.before > price.now ? (
+              <span className="text-sm text-[#8E9A84] line-through">{inr(price.before)}</span>
+            ) : product.mrp > price.now ? (
+              <span className="text-sm text-[#8E9A84] line-through">{inr(product.mrp)}</span>
+            ) : null}
             {oos ? (
               <Pill tone="rose">{t("out_of_stock")}</Pill>
             ) : product.stock <= 5 ? (
@@ -341,9 +344,7 @@ export default function ProductPage() {
                 >
                   <span className={variantId === v.id ? "h-4 w-4 rounded-full border-[5px] border-[#2F6B3F]" : "h-4 w-4 rounded-full border-2 border-[#D6D2BC]"} />
                   <span className="min-w-0 flex-1 text-sm font-semibold text-[#20291D]">{v.label}</span>
-                  <span className="text-sm font-bold text-[#1C3A2A]">
-                    {inr(product.rescue ? Math.round(v.price * (1 - product.rescue.pct / 100)) : v.price)}
-                  </span>
+                  <span className="text-sm font-bold text-[#1C3A2A]">{inr(displayPriceOf(product, v.id).now)}</span>
                 </button>
               ))}
             </div>

@@ -96,3 +96,34 @@ export function statusTone(status: string): "green" | "amber" | "red" | "gray" |
 export function inr(n: number): string {
   return "₹" + n.toLocaleString("en-IN");
 }
+
+// ── Sentence-case labels (S8 Wave C): one wording across the
+// whole product — matches the storefront's statusLabel exactly,
+// so buyers and sellers read the same words for the same state.
+
+export function statusLabel(status: string): string {
+  switch (status) {
+    case "PENDING":
+      return "Pending confirmation";
+    case "CONFIRMED":
+      return "Confirmed";
+    case "PREPARING":
+      return "Being prepared";
+    case "OUT_FOR_DELIVERY":
+      return "Out for delivery";
+    case "DELIVERED":
+      return "Delivered";
+    case "CANCELLED":
+      return "Cancelled";
+    case "REJECTED":
+      return "Rejected by seller";
+    default:
+      return status.replaceAll("_", " ");
+  }
+}
+
+export function paymentLabel(method: string | null, status: string): string {
+  const m = method === "cod" ? "COD" : method === "online" ? "Online" : (method ?? "—");
+  const s = status.charAt(0) + status.slice(1).toLowerCase();
+  return `${m} · ${s}`;
+}

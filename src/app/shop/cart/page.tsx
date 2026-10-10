@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Btn, Card, Empty, Loading, Pill, ProductThumb, SectionTitle, inr, toast } from "../ui";
 import { displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
-import { FREE_DELIVERY_AT, computeTotals, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
+import { FREE_DELIVERY_AT, computeTotals, displayPriceOf, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -93,6 +93,7 @@ export default function CartPage() {
                 {g.lines.map((l) => {
                   const name = displayName(l.product.names, lang, l.product.nameEn);
                   const low = l.qty > l.product.stock;
+                  const priceBefore = displayPriceOf(l.product, l.variantId).before;
                   return (
                     <div key={l.product.id + (l.variantId ?? "")} className="flex gap-3 py-4">
                       <ProductThumb category={l.product.category} size="sm" />
@@ -136,6 +137,9 @@ export default function CartPage() {
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-bold text-[#1C3A2A]">{inr(l.lineSub)}</p>
                         <p className="text-xs text-[#8E9A84]">
+                          {priceBefore > l.unit ? (
+                            <span className="line-through">{inr(priceBefore)}</span>
+                          ) : null}{" "}
                           {inr(l.unit)} × {l.qty}
                         </p>
                       </div>

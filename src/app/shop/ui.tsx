@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { CART_EVENT, MAX_QTY, addToCart, cartCount, loadCart, setQty } from "@/lib/cart";
+import { CART_EVENT, MAX_QTY, addToCart, cartCount, displayPriceOf, loadCart, setQty } from "@/lib/cart";
 import { LangPill, displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 
@@ -355,8 +355,8 @@ export function ToastHost() {
 export function ProductTile({ p }: { p: ProductCard }) {
   const { lang, t } = useLang();
   const name = displayName(p.names, lang, p.nameEn);
-  const displayPrice = p.rescue ? Math.round(p.priceMin * (1 - p.rescue.pct / 100)) : p.priceMin;
   const variantId = p.variants.length > 0 ? p.variants[0].id : null;
+  const dp = displayPriceOf(p, variantId);
   const cap = Math.min(p.stock, MAX_QTY);
 
   // Cart state is read only in effects/handlers (SSR has no localStorage)
@@ -400,7 +400,7 @@ export function ProductTile({ p }: { p: ProductCard }) {
         <span className="absolute inset-0 flex items-center justify-center text-6xl transition-transform duration-300 group-hover:scale-110" aria-hidden="true">
           {catEmoji(p.category)}
         </span>
-        {p.rescue ? (
+        {p.rescue && dp.before > dp.now ? (
           <span className="absolute left-3 top-3 rounded-full bg-[#C14E2A] px-2.5 py-0.5 text-xs font-bold text-white shadow">
             🏷️ −{p.rescue.pct}%
           </span>
@@ -421,8 +421,12 @@ export function ProductTile({ p }: { p: ProductCard }) {
           </p>
         ) : null}
         <div className="flex items-baseline gap-2">
-          <span className="text-lg font-bold text-[#1C3A2A]">{inr(displayPrice)}</span>
-          {p.mrp > displayPrice ? <span className="text-xs text-[#8E9A84] line-through">{inr(p.mrp)}</span> : null}
+          <span className="text-lg font-bold text-[#1C3A2A]">{inr(dp.now)}</span>
+          {dp.before > dp.now ? (
+            <span className="text-xs text-[#8E9A84] line-through">{inr(dp.before)}</span>
+          ) : p.mrp > dp.now ? (
+            <span className="text-xs text-[#8E9A84] line-through">{inr(p.mrp)}</span>
+          ) : null}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-[#66735F]">
           <StarRow value={p.avgStars} />

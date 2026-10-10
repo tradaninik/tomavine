@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Btn, Card, Pill, inr, statusTone } from "../ui";
+import { Btn, Card, Pill, inr, paymentLabel, statusLabel, statusTone } from "../ui";
 import { todayIST, plusDaysIST, readTrustMeta, formatPromisedDay } from "@/lib/trust";
 
 type Item = {
@@ -155,7 +155,7 @@ export default function SellerOrdersPage() {
                   {new Date(o.createdAt).toLocaleString("en-IN")} · {o.user.name ?? o.user.phone}
                 </p>
               </div>
-              <Pill tone={statusTone(o.status)}>{o.status.replaceAll("_", " ")}</Pill>
+              <Pill tone={statusTone(o.status)}>{statusLabel(o.status)}</Pill>
             </div>
 
             {trust.promisedDate && o.status !== "PENDING" ? (
@@ -201,7 +201,7 @@ export default function SellerOrdersPage() {
               <span>GST {inr(o.tax)}</span>
               <span className="font-bold text-[#1C3A2A]">Total {inr(o.total)}</span>
               <span>
-                {o.payment ? `${o.payment.method ?? "online"} · ${o.payment.status}` : "no payment record"}
+                {o.payment ? paymentLabel(o.payment.method, o.payment.status) : "no payment record"}
               </span>
             </div>
 

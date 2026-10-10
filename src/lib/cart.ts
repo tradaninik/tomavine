@@ -199,6 +199,38 @@ export function unitPriceOf(product: CartProduct, variantId: string | null): num
   return unit;
 }
 
+// ── Display pricing (S8 Wave C) ───────────────────────────────
+// The single source for what the UI shows, so display can never
+// disagree with the charge. `now` is the effective price — the
+// same math as unitPriceOf (variant price else priceMin, active
+// rescue applied, expiry-aware). `before` is the pre-discount
+// reference for struck-through display: striking the price the
+// discount was actually taken on makes the struck->bold gap
+// match the badge percent exactly. A lapsed rescue shows full
+// price everywhere.
+
+export function rescueLive(rescue: { pct: number; expiresAt: string } | null | undefined): boolean {
+  if (!rescue) {
+    return false;
+  }
+  return new Date(rescue.expiresAt).getTime() > Date.now();
+}
+
+export type DisplayPrice = { now: number; before: number };
+
+export function displayPriceOf(
+  p: { priceMin: number; variants: { id: string; price: number }[]; rescue: { pct: number; expiresAt: string } | null },
+  variantId: string | null,
+): DisplayPrice {
+  const variant = p.variants.find((v) => v.id === variantId) ?? p.variants[0] ?? null;
+  const before = variant ? variant.price : p.priceMin;
+  const r = p.rescue;
+  if (r && rescueLive(r)) {
+    return { now: Math.round(before * (1 - r.pct / 100)), before: before };
+  }
+  return { now: before, before: before };
+}
+
 export function computeTotals(lines: CartLine[], products: CartProduct[], mode: "DELIVERY" | "PICKUP"): CartTotals {
   const byId = new Map<string, CartProduct>();
   for (const p of products) {

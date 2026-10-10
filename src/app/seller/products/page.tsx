@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr } from "../ui";
+import { displayPriceOf } from "@/lib/cart";
 
 type Variant = {
   id: string;
@@ -686,6 +687,7 @@ export default function SellerProductsPage() {
 
       {products.map((p) => {
         const busy = busyId === p.id;
+        const dp = displayPriceOf(p, null);
 
         return (
           <Card key={p.id}>
@@ -703,8 +705,27 @@ export default function SellerProductsPage() {
               </Btn>
             </div>
 
+
+                        <p className="mt-3 text-sm text-[#1C3A2A]/70">
+              From {inr(dp.now)}
+              {dp.before > dp.now ? (
+                <>
+                  {" · was "}
+                  <span className="line-through">{inr(dp.before)}</span>
+                </>
+              ) : null}{" "}
+              · MRP {inr(p.mrp)}
+            </p>
+           
             <p className="mt-3 text-sm text-[#1C3A2A]/70">
-              From {inr(p.priceMin)} · MRP {inr(p.mrp)}
+              From {inr(dp.now)}
+              {dp.before > dp.now ? (
+                <>
+                  {" · was "}
+                  <span className="line-through">{inr(dp.before)}</span>
+                </>
+              ) : null}{" "}
+              · MRP {inr(p.mrp)}
             </p>
 
             {p.variants.length > 0 ? (
