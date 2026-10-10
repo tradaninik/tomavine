@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
-import { OrderStatus, Role } from "@prisma/client";
+﻿import { NextResponse } from "next/server";
+import { OrderStatus, Role, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
 import { buyerUpdate } from "@/lib/notify";
+import { validatePromisedDate, computeOnTime, readTrustMeta, writeTrustIntoMeta } from "@/lib/trust";
 
 const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.PENDING,
@@ -50,7 +51,7 @@ export async function PATCH(request: Request) {
 
   const { nursery } = auth;
 
-  let body: { id?: string; action?: string };
+  let body: { id?: string; action?: string; promisedDate?: string };
 
   try {
     body = await request.json();
@@ -60,6 +61,7 @@ export async function PATCH(request: Request) {
 
   const id = typeof body.id === "string" ? body.id : "";
   const action = typeof body.action === "string" ? body.action : "";
+  const promisedDate = typeof body.promisedDate === "string" ? body.promisedDate : "";
 
   if (!id || !action) {
     return NextResponse.json({ error: "Missing order id or action" }, { status: 400 });
@@ -76,6 +78,7 @@ export async function PATCH(request: Request) {
   let nextStatus: OrderStatus;
   let note = "";
   let deliveryOtp: string | null = null;
+  let metaPatch: Record<string, string | number | boolean> | null = null;
 
   if (action === "accept") {
     if (order.status !== OrderStatus.PENDING) {
@@ -83,6 +86,20 @@ export async function PATCH(request: Request) {
     }
     nextStatus = OrderStatus.CONFIRMED;
     note = "Order accepted by seller";
+
+    // ── Trust pack (S8 Wave B): optional promised delivery date.
+    // DELIVERY orders only — a date sent for a PICKUP order is
+    // ignored. Stored in Order.meta, preserving existing keys.
+    if (promisedDate.length > 0 && order.mode === "DELIVERY") {
+      const check = validatePromisedDate(promisedDate);
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: 400 });
+      }
+      metaPatch = writeTrustIntoMeta(order.meta, {
+        promisedDate: check.value,
+        promisedAt: new Date().toISOString(),
+      });
+    }
   } else if (action === "reject") {
     if (order.status !== OrderStatus.PENDING) {
       return NextResponse.json({ error: "Only pending orders can be rejected" }, { status: 400 });
@@ -102,14 +119,30 @@ export async function PATCH(request: Request) {
     }
     nextStatus = OrderStatus.DELIVERED;
     note = "Delivered";
+
+    // ── Trust pack: record the delivery instant and compute the
+    // verdict once — on time = delivered by END of the promised IST
+    // day (timezone-aware; the DB stores UTC). No promised date →
+    // no onTime key → the order can never show as late.
+    const deliveredAt = new Date().toISOString();
+    const verdict = computeOnTime(readTrustMeta(order.meta).promisedDate, deliveredAt);
+    const patch: Record<string, string | boolean> = { deliveredAt: deliveredAt };
+    if (verdict !== null) {
+      patch.onTime = verdict;
+    }
+    metaPatch = writeTrustIntoMeta(order.meta, patch);
   } else {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
-  const updateData: { status: OrderStatus; deliveryOtp?: string } = { status: nextStatus };
+  const updateData: { status: OrderStatus; deliveryOtp?: string; meta?: Prisma.InputJsonValue } = { status: nextStatus };
 
   if (deliveryOtp) {
     updateData.deliveryOtp = deliveryOtp;
+  }
+
+  if (metaPatch !== null) {
+    updateData.meta = metaPatch as Prisma.InputJsonValue;
   }
 
   await db.order.update({

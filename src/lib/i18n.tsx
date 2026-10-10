@@ -161,6 +161,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "Order cancelled",
     err_cancel: "Could not cancel — the order may have moved ahead. Refreshing.",
     cancel_note: "You can cancel while the order is pending or confirmed.",
+        // ── order trust pack (S8) ──
+    promised_by: "Arriving by {d}",
+    ontime_badge: "Delivered on time",
+    late_badge: "Delivered late",
+    delivery_rate_q: "How was the delivery?",
+    delivery_rate_hint: "Optional — tells other buyers if orders arrive on time",
+    delivery_rated: "Delivery experience: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "List your nursery",
     sell_page_title: "Sell on Tomavine",
@@ -351,6 +358,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ऑर्डर रद्द हो गया",
     err_cancel: "रद्द नहीं हो सका — ऑर्डर आगे बढ़ गया होगा। ताज़ा किया जा रहा है।",
     cancel_note: "पुष्टि प्रतीक्षित या पुष्ट ऑर्डर ही रद्द कर सकते हैं।",
+        // ── order trust pack (S8) ──
+    promised_by: "{d} तक पहुँचेगा",
+    ontime_badge: "समय पर डिलीवर हुआ",
+    late_badge: "देर से डिलीवर हुआ",
+    delivery_rate_q: "डिलीवरी कैसी रही?",
+    delivery_rate_hint: "वैकल्पिक — बताता है कि ऑर्डर समय पर आते हैं या नहीं",
+    delivery_rated: "डिलीवरी अनुभव: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "अपनी नर्सरी लिस्ट करें",
     sell_page_title: "Tomavine पर बेचें",
@@ -541,6 +555,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ఆర్డర్ రద్దైంది",
     err_cancel: "రద్దు కాలేదు — ఆర్డర్ ముందుకు వెళ్ళి ఉండవచ్చు. రిఫ్రెష్ అవుతోంది.",
     cancel_note: "ధృవీకరణ వేచి ఉన్న లేదా ధృవీకరించిన ఆర్డర్‌లను మాత్రమే రద్దు చేయవచ్చు.",
+        // ── order trust pack (S8) ──
+    promised_by: "{d} నాటికి చేరుతుంది",
+    ontime_badge: "సమయానికి డెలివరీ అయింది",
+    late_badge: "ఆలస్యంగా డెలివరీ అయింది",
+    delivery_rate_q: "డెలివరీ ఎలా ఉంది?",
+    delivery_rate_hint: "ఐచ్ఛికం — ఆర్డర్లు సమయానికి వస్తున్నాయో లేదో తెలుపుతుంది",
+    delivery_rated: "డెలివరీ అనుభవం: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "మీ నర్సరీని లిస్ట్ చేయండి",
     sell_page_title: "Tomavine లో అమ్మండి",
@@ -731,6 +752,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ಆರ್ಡರ್ ರದ್ದಾಯಿತು",
     err_cancel: "ರದ್ದು ಮಾಡಲಾಗಲಿಲ್ಲ — ಆರ್ಡರ್ ಮುಂದೆ ಹೋಗಿರಬಹುದು. ರಿಫ್ರೆಶ್ ಆಗುತ್ತಿದೆ.",
     cancel_note: "ದೃಢೀಕರಣ ಬಾಕಿ ಅಥವಾ ದೃಢೀಕೃತ ಆರ್ಡರ್‌ಗಳನ್ನು ಮಾತ್ರ ರದ್ದು ಮಾಡಬಹುದು.",
+        // ── order trust pack (S8) ──
+    promised_by: "{d} ಒಳಗೆ ತಲುಪುತ್ತದೆ",
+    ontime_badge: "ಸಮಯಕ್ಕೆ ಡೆಲಿವರಿ ಆಗಿದೆ",
+    late_badge: "ತಡವಾಗಿ ಡೆಲಿವರಿ ಆಗಿದೆ",
+    delivery_rate_q: "ಡೆಲಿವರಿ ಹೇಗಿತ್ತು?",
+    delivery_rate_hint: "ಐಚ್ಛಿಕ — ಆರ್ಡರ್‌ಗಳು ಸಮಯಕ್ಕೆ ಬರುತ್ತಿವೆಯೇ ಎಂದು ತಿಳಿಸುತ್ತದೆ",
+    delivery_rated: "ಡೆಲಿವರಿ ಅನುಭವ: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "ನಿಮ್ಮ ನರ್ಸರಿಯನ್ನು ಪಟ್ಟಿಮಾಡಿ",
     sell_page_title: "Tomavine ನಲ್ಲಿ ಮಾರಿ",
@@ -921,6 +949,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ஆர்டர் ரத்து செய்யப்பட்டது",
     err_cancel: "ரத்து செய்ய முடியவில்லை — ஆர்டர் முன்னேறியிருக்கலாம். புதுப்பிக்கப்படுகிறது.",
     cancel_note: "உறுதி நிலுவையில் அல்லது உறுதியான ஆர்டர்களை மட்டுமே ரத்து செய்யலாம்.",
+        // ── order trust pack (S8) ──
+    promised_by: "{d} வரை வந்து சேரும்",
+    ontime_badge: "நேரத்தில் டெலிவரி ஆனது",
+    late_badge: "தாமதமாக டெலிவரி ஆனது",
+    delivery_rate_q: "டெலிவரி எப்படி இருந்தது?",
+    delivery_rate_hint: "விருப்பம் — ஆர்டர்கள் நேரத்தில் வருகின்றனவா என்று காட்டுகிறது",
+    delivery_rated: "டெலிவரி அனுபவம்: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "உங்கள் நர்சரியை பட்டியலிடுங்கள்",
     sell_page_title: "Tomavine இல் விற்குங்கள்",
@@ -1111,6 +1146,13 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ऑर्डर रद्द झाले",
     err_cancel: "रद्द करता आले नाही — ऑर्डर पुढे गेले असेल. रिफ्रेश करत आहोत.",
     cancel_note: "पुष्टी प्रलंबित किंवा पुष्ट झालेले ऑर्डरच रद्द करता येतात.",
+        // ── order trust pack (S8) ──
+    promised_by: "{d} पर्यंत पोहोचेल",
+    ontime_badge: "वेळेत डिलिव्हरी झाली",
+    late_badge: "उशिरा डिलिव्हरी झाली",
+    delivery_rate_q: "डिलिव्हरी कशी होती?",
+    delivery_rate_hint: "ऐच्छिक — ऑर्डर वेळेत येतात का ते दर्शवते",
+    delivery_rated: "डिलिव्हरी अनुभव: {n}/5",
     // ── /sell — list your nursery ──
     list_your_nursery: "तुमची नर्सरी यादीत द्या",
     sell_page_title: "Tomavine वर विका",

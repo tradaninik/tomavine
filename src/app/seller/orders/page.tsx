@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr, statusTone } from "../ui";
+import { todayIST, plusDaysIST, readTrustMeta, formatPromisedDay } from "@/lib/trust";
 
 type Item = {
   id: string;
@@ -15,12 +16,14 @@ type Order = {
   id: string;
   code: string;
   status: string;
+  mode: string;
   subtotal: number;
   deliveryFee: number;
   tax: number;
   total: number;
   deliveryOtp: string | null;
   createdAt: string;
+  meta: unknown;
   // ── ADDED: tolerant address shape (seed orders use line1,
   // checkout orders use house/street) ──
   address: {
@@ -43,12 +46,19 @@ function tabButton(active: boolean) {
     : "rounded-lg px-4 py-1.5 text-sm font-semibold text-[#1C3A2A]/60 hover:bg-[#F7F3E8]";
 }
 
+function datePill(active: boolean) {
+  return active
+    ? "rounded-full bg-[#2F6B3F] px-3 py-1 text-xs font-semibold text-white"
+    : "rounded-full border border-[#1C3A2A]/20 px-3 py-1 text-xs font-semibold text-[#1C3A2A]/70 hover:bg-[#F7F3E8]";
+}
+
 export default function SellerOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState<"active" | "all">("active");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [datePick, setDatePick] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,7 +82,7 @@ export default function SellerOrdersPage() {
     load();
   }, [load]);
 
-  async function act(id: string, action: string) {
+  async function act(id: string, action: string, promisedDate?: string) {
     if (action === "reject") {
       const sure = window.confirm("Reject this order? The buyer will be notified.");
 
@@ -83,10 +93,16 @@ export default function SellerOrdersPage() {
     setError("");
 
     try {
+      const payload: Record<string, unknown> = { id: id, action: action };
+
+      if (action === "accept" && typeof promisedDate === "string" && promisedDate.length > 0) {
+        payload.promisedDate = promisedDate;
+      }
+
       const res = await fetch("/api/seller/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: id, action: action }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -127,6 +143,8 @@ export default function SellerOrdersPage() {
 
       {orders.map((o) => {
         const busy = busyId === o.id;
+        const trust = readTrustMeta(o.meta);
+        const sel = datePick[o.id] ?? plusDaysIST(1);
 
         return (
           <Card key={o.id}>
@@ -139,6 +157,14 @@ export default function SellerOrdersPage() {
               </div>
               <Pill tone={statusTone(o.status)}>{o.status.replaceAll("_", " ")}</Pill>
             </div>
+
+            {trust.promisedDate && o.status !== "PENDING" ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold text-[#1C3A2A]">🗓 Promised: {formatPromisedDay(trust.promisedDate, "en-IN")}</span>
+                {o.status === "DELIVERED" && trust.onTime === true ? <Pill tone="green">Delivered on time</Pill> : null}
+                {o.status === "DELIVERED" && trust.onTime === false ? <Pill tone="red">Delivered later than promised</Pill> : null}
+              </div>
+            ) : null}
 
             <ul className="mt-4 divide-y divide-[#1C3A2A]/5 text-sm">
               {o.items.map((it) => (
@@ -189,8 +215,34 @@ export default function SellerOrdersPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               {o.status === "PENDING" ? (
                 <>
-                  <Btn onClick={() => act(o.id, "accept")} disabled={busy}>
-                    Accept
+                  {o.mode === "DELIVERY" ? (
+                    <div className="w-full rounded-xl bg-[#F7F3E8] px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/50">Promised delivery date — shown to the buyer</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button type="button" className={datePill(sel === todayIST())} onClick={() => setDatePick({ ...datePick, [o.id]: todayIST() })}>
+                          Today
+                        </button>
+                        <button type="button" className={datePill(sel === plusDaysIST(1))} onClick={() => setDatePick({ ...datePick, [o.id]: plusDaysIST(1) })}>
+                          Tomorrow
+                        </button>
+                        <button type="button" className={datePill(sel === plusDaysIST(2))} onClick={() => setDatePick({ ...datePick, [o.id]: plusDaysIST(2) })}>
+                          In 2 days
+                        </button>
+                        <input
+                          type="date"
+                          className="rounded-lg border border-[#1C3A2A]/20 bg-white px-2 py-1 text-xs text-[#1C3A2A]"
+                          value={sel}
+                          onChange={(e) => setDatePick({ ...datePick, [o.id]: e.target.value })}
+                        />
+                        <button type="button" className={datePill(sel === "")} onClick={() => setDatePick({ ...datePick, [o.id]: "" })}>
+                          No date
+                        </button>
+                        {sel ? <span className="text-xs font-semibold text-[#24562F]">→ promised {formatPromisedDay(sel, "en-IN")}</span> : null}
+                      </div>
+                    </div>
+                  ) : null}
+                  <Btn onClick={() => act(o.id, "accept", o.mode === "DELIVERY" ? sel || undefined : undefined)} disabled={busy}>
+                    {o.mode === "DELIVERY" && sel ? `Accept — promise ${formatPromisedDay(sel, "en-IN")}` : "Accept"}
                   </Btn>
                   <Btn kind="danger" onClick={() => act(o.id, "reject")} disabled={busy}>
                     Reject

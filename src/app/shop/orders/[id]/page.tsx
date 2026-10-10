@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Btn, Card, ErrBox, Loading, StarRow, catEmoji, formatDate, formatDateTime, inr, inputCls, statusTone, toast } from "../../ui";
 import { displayName, useLang } from "@/lib/i18n";
+import { readTrustMeta, formatPromisedDay, localeForLang } from "@/lib/trust";
 
 const STATUS_KEYS: Record<string, string> = {
   PENDING: "st_pending",
@@ -66,6 +67,7 @@ type OrderDetail = {
   createdAt: string;
   address: unknown;
   deliveryOtp: string | null;
+  meta: unknown;
   nursery: { name: string; slug: string; city: string; phone: string };
   items: OrderItemRow[];
   events: EventRow[];
@@ -107,6 +109,7 @@ export default function OrderDetailPage() {
   const [pickProduct, setPickProduct] = useState("");
   const [pickStars, setPickStars] = useState(0);
   const [pickText, setPickText] = useState("");
+  const [pickDelivery, setPickDelivery] = useState(0);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -156,17 +159,27 @@ export default function OrderDetailPage() {
     }
     setReviewBusy(true);
     setReviewError(null);
+    const payload: Record<string, unknown> = {
+      orderId: id,
+      productId: pickProduct,
+      stars: pickStars,
+      text: pickText.trim(),
+    };
+    if (order?.mode === "DELIVERY" && pickDelivery >= 1 && pickDelivery <= 5) {
+      payload.deliveryRating = pickDelivery;
+    }
     try {
       const res = await fetch("/api/customer/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: id, productId: pickProduct, stars: pickStars, text: pickText.trim() }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (res.ok) {
         toast(t("review_thanks"));
         setPickStars(0);
         setPickText("");
+        setPickDelivery(0);
         load();
       } else if (data && data.error === "not_delivered") {
         setReviewError(t("err_not_delivered"));
@@ -235,6 +248,7 @@ export default function OrderDetailPage() {
   const aPhone = addressField(order.address, "phone");
   const aCity = addressField(order.address, "city");
   const aPin = addressField(order.address, "pincode");
+  const trust = readTrustMeta(order.meta);
   const showPin = order.deliveryOtp !== null && order.deliveryOtp.length > 0 && order.status !== "DELIVERED" && order.status !== "CANCELLED" && order.status !== "REJECTED";
   const reviewChoices = order.items.filter((it, i, arr) => arr.findIndex((x) => x.productId === it.productId) === i);
   const eventsDesc = [...order.events].reverse();
@@ -251,17 +265,28 @@ export default function OrderDetailPage() {
             {order.code}
           </h1>
           <p className="mt-1 text-sm text-[#66735F]">
-            {t("placed_on", { d: formatDate(order.createdAt) })} ·{" "}
+            {t("placed_on", { d: formatDate(order.createdAt) })}{" "}
             <Link href={`/shop/nursery/${order.nursery.slug}`} className="font-semibold text-[#2F6B3F] hover:underline">
               {order.nursery.name} · {order.nursery.city}
             </Link>
           </p>
+          {order.mode === "DELIVERY" && trust.promisedDate && order.status !== "DELIVERED" && order.status !== "CANCELLED" && order.status !== "REJECTED" ? (
+            <p className="mt-1 text-sm font-semibold text-[#24562F]">
+              🗓 {t("promised_by", { d: formatPromisedDay(trust.promisedDate, localeForLang(lang)) })}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusChip status={order.status} />
           <span className="rounded-full bg-[#EDF2E6] px-2.5 py-0.5 text-xs font-semibold text-[#24562F]">
             {order.mode === "PICKUP" ? t("pickup_mode") : t("delivery_mode")}
           </span>
+          {order.status === "DELIVERED" && trust.onTime === true ? (
+            <span className="rounded-full bg-[#2F6B3F]/10 px-2.5 py-0.5 text-xs font-semibold text-[#2F6B3F]">{t("ontime_badge")}</span>
+          ) : null}
+          {order.status === "DELIVERED" && trust.onTime === false ? (
+            <span className="rounded-full bg-[#C14E2A]/10 px-2.5 py-0.5 text-xs font-semibold text-[#C14E2A]">{t("late_badge")}</span>
+          ) : null}
         </div>
       </div>
 
@@ -383,6 +408,11 @@ export default function OrderDetailPage() {
               <StarRow value={order.review.stars} />
               <p className="mt-2 text-sm text-[#20291D]">{order.review.text}</p>
               <p className="mt-1 text-xs text-[#8E9A84]">{formatDate(order.review.createdAt)}</p>
+              {order.mode === "DELIVERY" && trust.deliveryRating ? (
+                <p className="mt-2 text-sm font-semibold text-[#1C3A2A]">
+                  🚚 {t("delivery_rated", { n: trust.deliveryRating })}
+                </p>
+              ) : null}
               {order.review.reply ? (
                 <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3">
                   <p className="text-xs font-bold text-[#24562F]">{t("nursery_reply")}</p>
@@ -423,6 +453,25 @@ export default function OrderDetailPage() {
                   <span className="ml-2 text-sm font-semibold text-[#1C3A2A]">{pickStars > 0 ? `${pickStars}/5` : t("tap_to_rate")}</span>
                 </div>
               </div>
+              {order.mode === "DELIVERY" ? (
+                <div>
+                  <span className="mb-1 block text-xs font-semibold tracking-wide text-[#1C3A2A]/60">{t("delivery_rate_q")}</span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        aria-label={`${s} / 5`}
+                        onClick={() => setPickDelivery(s)}
+                        className="text-2xl leading-none transition hover:scale-110"
+                      >
+                        <span className={s <= pickDelivery ? "text-[#E39B2D]" : "text-[#D6D2BC]"}>★</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-[#8E9A84]">{t("delivery_rate_hint")}</p>
+                </div>
+              ) : null}
               <textarea
                 value={pickText}
                 onChange={(e) => setPickText(e.target.value)}

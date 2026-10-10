@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 
@@ -44,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       createdAt: order.createdAt.toISOString(),
       address: order.address,
       deliveryOtp: order.deliveryOtp,
+      meta: order.meta,
       nursery: order.nursery,
       items: order.items.map((it) => ({
         id: it.id,

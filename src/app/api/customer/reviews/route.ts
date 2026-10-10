@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
+import { writeTrustIntoMeta } from "@/lib/trust";
 
 // POST /api/customer/reviews — one review per DELIVERED order, targeting a
 // product from that order. Recomputes the nursery's ratingAvg in the same
 // transaction, so the storefront rating can never drift from the reviews.
+// Optional deliveryRating (1–5) rides the same transaction and is stored in
+// Order.meta — the delivery-experience half of the trust pack (S8 Wave B).
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) {
@@ -17,6 +21,7 @@ export async function POST(req: Request) {
     productId?: unknown;
     stars?: unknown;
     text?: unknown;
+    deliveryRating?: unknown;
   } | null;
 
   const orderId = typeof body?.orderId === "string" ? body.orderId : "";
@@ -24,6 +29,10 @@ export async function POST(req: Request) {
   const stars =
     typeof body?.stars === "number" && Number.isFinite(body.stars) ? Math.round(body.stars) : 0;
   const text = typeof body?.text === "string" ? body.text.trim() : "";
+  const deliveryRating =
+    typeof body?.deliveryRating === "number" && Number.isFinite(body.deliveryRating)
+      ? Math.round(body.deliveryRating)
+      : 0;
 
   if (orderId.length === 0 || productId.length === 0) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
@@ -33,6 +42,9 @@ export async function POST(req: Request) {
   }
   if (text.length < 3 || text.length > 1000) {
     return NextResponse.json({ error: "bad_text" }, { status: 400 });
+  }
+  if (deliveryRating !== 0 && (deliveryRating < 1 || deliveryRating > 5)) {
+    return NextResponse.json({ error: "bad_delivery_rating" }, { status: 400 });
   }
 
   const order = await db.order.findFirst({
@@ -66,6 +78,17 @@ export async function POST(req: Request) {
         text: text,
       },
     });
+
+    if (deliveryRating >= 1 && order.mode === "DELIVERY") {
+      const merged = writeTrustIntoMeta(order.meta, {
+        deliveryRating: deliveryRating,
+        deliveryRatedAt: new Date().toISOString(),
+      });
+      await tx.order.update({
+        where: { id: order.id },
+        data: { meta: merged as Prisma.InputJsonValue },
+      });
+    }
 
     const agg = await tx.review.aggregate({
       where: { product: { nurseryId: order.nurseryId } },
