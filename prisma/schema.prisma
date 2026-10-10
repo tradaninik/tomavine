@@ -115,6 +115,8 @@ model Product {
   mrp        Int
   stock      Int      @default(0)
   hidden     Boolean  @default(false)
+  subCategory String?
+  image       String?
   createdAt  DateTime @default(now())
   variants    ProductVariant[]
   rescue      RescueListing?
