@@ -25,6 +25,8 @@ export type ProductCard = {
   priceMin: number;
   mrp: number;
   stock: number;
+  subCategory: string | null;
+  image: string | null;
   nurseryId: string;
   nurseryName: string;
   nurserySlug: string;
@@ -69,6 +71,8 @@ export function productCard(p: ProductWithRelations): ProductCard {
     priceMin: p.priceMin,
     mrp: p.mrp,
     stock: p.stock,
+    subCategory: p.subCategory,
+    image: p.image,
     nurseryId: p.nurseryId,
     nurseryName: p.nursery.name,
     nurserySlug: p.nursery.slug,

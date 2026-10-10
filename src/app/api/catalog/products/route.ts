@@ -6,6 +6,7 @@ import { PUBLIC_PRODUCT_INCLUDE, productCard, publicProductWhere } from "@/lib/c
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const category = url.searchParams.get("category");
+  const sub = url.searchParams.get("sub");
   const nurserySlug = url.searchParams.get("nursery");
   const rescueOnly = url.searchParams.get("rescue");
   const q = url.searchParams.get("q");
@@ -17,6 +18,9 @@ export async function GET(req: Request) {
     where.category = category;
   }
 
+  if (sub) {
+    where.subCategory = sub;
+  }
   if (nurserySlug) {
     where.nursery = { status: "VERIFIED", retailOk: true, slug: nurserySlug };
   }

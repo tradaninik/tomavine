@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
+import { isValidSub } from "@/lib/subcategories";
 
 export async function GET() {
   const auth = await requireNursery();
@@ -48,6 +49,7 @@ export async function PATCH(request: Request) {
     mrp?: number;
     stock?: number;
     hidden?: boolean;
+    subCategory?: string;
     rescue?: { pct: number; days: number } | null;
   };
 
@@ -72,7 +74,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  const data: { nameEn?: string; priceMin?: number; mrp?: number; stock?: number; hidden?: boolean } = {};
+  const data: { nameEn?: string; priceMin?: number; mrp?: number; stock?: number; hidden?: boolean; subCategory?: string | null } = {};
 
   if (typeof body.nameEn === "string") {
     const name = body.nameEn.trim();
@@ -108,6 +110,16 @@ export async function PATCH(request: Request) {
 
   if (typeof body.hidden === "boolean") {
     data.hidden = body.hidden;
+  }
+
+  if (typeof body.subCategory === "string") {
+    if (body.subCategory === "") {
+      data.subCategory = null;
+    } else if (!isValidSub(product.category, body.subCategory)) {
+      return NextResponse.json({ error: "Unknown subcategory for this category" }, { status: 400 });
+    } else {
+      data.subCategory = body.subCategory;
+    }
   }
 
   const finalPrice = data.priceMin ?? product.priceMin;
@@ -206,6 +218,7 @@ export async function POST(request: Request) {
 
   let body: {
     category?: string;
+    subCategory?: string;
     nameEn?: string;
     names?: unknown;
     botanical?: string;
@@ -242,6 +255,12 @@ export async function POST(request: Request) {
 
   if (allowed !== null && !allowed.includes(category)) {
     return NextResponse.json({ error: "Your nursery does not sell in this category yet — contact Tomavine support to enable it" }, { status: 400 });
+  }
+
+  const subCategory = typeof body.subCategory === "string" ? body.subCategory : "";
+
+  if (subCategory !== "" && !isValidSub(category, subCategory)) {
+    return NextResponse.json({ error: "Unknown subcategory for this category" }, { status: 400 });
   }
 
   const nameEn = typeof body.nameEn === "string" ? body.nameEn.trim() : "";
@@ -344,6 +363,7 @@ export async function POST(request: Request) {
     data: {
       nurseryId: nursery.id,
       category: category,
+      subCategory: subCategory === "" ? undefined : subCategory,
       nameEn: nameEn,
       names: names === undefined ? undefined : (names as Prisma.InputJsonValue),
       botanical: botanical === "" ? undefined : botanical,

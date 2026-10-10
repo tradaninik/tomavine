@@ -58,6 +58,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       priceMin: product.priceMin,
       mrp: product.mrp,
       stock: product.stock,
+      subCategory: product.subCategory,
+      image: product.image,
       nursery: product.nursery,
       variants: product.variants.map((v) => ({ id: v.id, label: v.label, price: v.price })),
       rescue: rescue,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr } from "../ui";
 import { displayPriceOf } from "@/lib/cart";
+import { subOptionsFor, subLabel } from "@/lib/subcategories";
 
 type Variant = {
   id: string;
@@ -19,6 +20,7 @@ type Rescue = {
 type Product = {
   id: string;
   category: string;
+  subCategory: string | null;
   nameEn: string;
   priceMin: number;
   mrp: number;
@@ -115,6 +117,7 @@ export default function SellerProductsPage() {
   const [taxLoaded, setTaxLoaded] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newCat, setNewCat] = useState("plants");
+  const [newSub, setNewSub] = useState("");
   const [newName, setNewName] = useState("");
   const [newBotanical, setNewBotanical] = useState("");
   const [newPrice, setNewPrice] = useState("");
@@ -162,6 +165,7 @@ export default function SellerProductsPage() {
   useEffect(() => {
     if (allowedCats !== null && allowedCats.length > 0 && !allowedCats.includes(newCat)) {
       setNewCat(allowedCats[0]);
+      setNewSub("");
       setNewVariety("");
       setNewPlantType("");
       setNewSize("");
@@ -260,6 +264,7 @@ export default function SellerProductsPage() {
 
   function changeCat(c: string) {
     setNewCat(c);
+    setNewSub("");
     setNewVariety("");
     setNewPlantType("");
     setNewSize("");
@@ -324,6 +329,7 @@ export default function SellerProductsPage() {
 
   function resetNew() {
     setNewName("");
+    setNewSub("");
     setNewBotanical("");
     setNewPrice("");
     setNewMrp("");
@@ -401,6 +407,9 @@ export default function SellerProductsPage() {
       mrp: mrp,
       stock: stock,
     };
+    if (newSub) {
+      payload.subCategory = newSub;
+    }
     if (newBotanical.trim()) {
       payload.botanical = newBotanical.trim();
     }
@@ -487,6 +496,24 @@ export default function SellerProductsPage() {
                 maxLength={120}
                 placeholder={newCat === "saplings" ? "Pick a variety or type a name" : "e.g. Jade Plant"}
               />
+            </label>
+          </div>
+
+          <div className="mt-3 sm:max-w-md">
+            <label className="text-sm font-medium text-[#1C3A2A]">
+              Subcategory (optional — helps buyers browse)
+              <select
+                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                value={newSub}
+                onChange={(e) => setNewSub(e.target.value)}
+              >
+                <option value="">— none —</option>
+                {subOptionsFor(newCat).map((s) => (
+                  <option key={s.v} value={s.v}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 
@@ -696,6 +723,7 @@ export default function SellerProductsPage() {
                 <p className="font-bold text-[#1C3A2A]">{p.nameEn}</p>
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Pill tone="green">{p.category}</Pill>
+                  {p.subCategory ? <Pill tone="blue">{subLabel(p.category, p.subCategory)}</Pill> : null}
                   {p.rescue ? <Pill tone="amber">Rescue {p.rescue.pct}% off</Pill> : null}
                   {p.hidden ? <Pill tone="gray">Hidden</Pill> : null}
                 </div>
@@ -705,18 +733,6 @@ export default function SellerProductsPage() {
               </Btn>
             </div>
 
-
-                        <p className="mt-3 text-sm text-[#1C3A2A]/70">
-              From {inr(dp.now)}
-              {dp.before > dp.now ? (
-                <>
-                  {" · was "}
-                  <span className="line-through">{inr(dp.before)}</span>
-                </>
-              ) : null}{" "}
-              · MRP {inr(p.mrp)}
-            </p>
-           
             <p className="mt-3 text-sm text-[#1C3A2A]/70">
               From {inr(dp.now)}
               {dp.before > dp.now ? (
