@@ -1,11 +1,53 @@
 // scripts/smoke.mjs - Tomavine read-only smoke probes.
 // Usage:
-//   node scripts/smoke.mjs                              (probes localhost:3000)
+//   node scripts/smoke.mjs                              (auto-finds dev on 3000-3002)
+//   node scripts/smoke.mjs http://localhost:3001        (explicit base)
 //   node scripts/smoke.mjs https://tomavine.vercel.app  (probes production)
 // All probes are read-only: no logins, no orders, no writes.
 // First run after idle may be slow - Neon waking up. Wait 15s, re-run.
+//
+// Port auto-detection: with no URL argument, probes localhost:3000,
+// :3001, :3002 and uses the first that serves Tomavine's landing
+// page (a busy port is not proof — another app may hold 3000).
+// Falls back to 3000 when nothing answers, so failures read normally.
 
-const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/+$/, "");
+const explicit = process.argv[2];
+
+async function isTomavine(base) {
+  try {
+    const res = await fetch(base + "/", { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      return false;
+    }
+    const html = await res.text();
+    return html.includes("Tomavine");
+  } catch {
+    return false;
+  }
+}
+
+let base;
+let baseNote = "";
+if (explicit) {
+  base = explicit.replace(/\/+$/, "");
+} else {
+  const candidates = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+  base = candidates[0];
+  let found = false;
+  for (const c of candidates) {
+    if (await isTomavine(c)) {
+      base = c;
+      found = true;
+      if (c !== candidates[0]) {
+        baseNote = "  (auto-detected — 3000 busy or another app)";
+      }
+      break;
+    }
+  }
+  if (!found) {
+    baseNote = "  (no Tomavine dev server found on 3000–3002)";
+  }
+}
 
 let pass = 0;
 let fail = 0;
@@ -36,7 +78,7 @@ async function probe(name, path, expect, read) {
   }
 }
 
-console.log("Tomavine smoke probes - " + base);
+console.log("Tomavine smoke probes - " + base + baseNote);
 console.log("");
 
 await probe("Landing page", "/", 200);

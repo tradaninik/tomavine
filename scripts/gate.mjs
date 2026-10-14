@@ -5,8 +5,17 @@
 //   2. node scripts/smoke.mjs [base]    (runtime probes against a running server)
 //
 // Usage:
-//   node scripts/gate.mjs                              -> local: dev must be running in Terminal 1
+//   node scripts/gate.mjs                              -> local: auto-finds the dev server
 //   node scripts/gate.mjs https://tomavine.vercel.app  -> production lap, after the deploy shows Ready
+//
+// Port auto-detection (zero manual intervention): with no URL argument,
+// the gate probes localhost:3000, :3001 and :3002 and uses the first
+// one that answers with Tomavine's landing page (the HTML carries the
+// brand name — a merely BUSY port is not proof; another app may hold
+// 3000, S9 incident: metabolicapp). Survives "Port 3000 is in use,
+// trying 3001" with nobody setting anything. If nothing Tomavine-shaped
+// answers, it falls back to 3000 so the smoke probes report their
+// normal reachability failures.
 //
 // Deliberately NOT chained: npm run build. `next build` must run with the dev
 // server STOPPED (concurrent .next writes corrupt it — gotcha 28), so the build
@@ -33,6 +42,33 @@ function lineContaining(text, needle) {
   return text.split(/\r?\n/).find((l) => l.includes(needle)) ?? "";
 }
 
+// ── Port auto-detection ──────────────────────────────────────
+
+const CANDIDATE_BASES = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+
+async function isTomavine(base) {
+  try {
+    const res = await fetch(base + "/", { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      return false;
+    }
+    const html = await res.text();
+    return html.includes("Tomavine");
+  } catch {
+    return false;
+  }
+}
+
+async function resolveBase() {
+  for (const candidate of CANDIDATE_BASES) {
+    if (await isTomavine(candidate)) {
+      const note = candidate === CANDIDATE_BASES[0] ? "" : "  (auto-detected — 3000 busy or another app)";
+      return { base: candidate, note: note };
+    }
+  }
+  return { base: CANDIDATE_BASES[0], note: "  (no Tomavine dev server found on 3000–3002 — start npm run dev)" };
+}
+
 // ── 1. Route audit ───────────────────────────────────────────
 console.log("── Route audit ──");
 const audit = run(["scripts/audit-routes.mjs"]);
@@ -41,8 +77,17 @@ const auditCounts = lineStarting(audit.out, "Pages:");
 const auditOk = audit.ok && audit.out.includes("No broken internal links found.");
 
 // ── 2. Smoke probes ──────────────────────────────────────────
-const base = process.argv[2] ?? "http://localhost:3000";
-console.log("\n── Smoke probes - " + base + " ──");
+const explicitBase = process.argv[2];
+let base;
+let baseNote = "";
+if (explicitBase) {
+  base = explicitBase;
+} else {
+  const found = await resolveBase();
+  base = found.base;
+  baseNote = found.note;
+}
+console.log("\n── Smoke probes - " + base + baseNote + " ──");
 const smoke = run(["scripts/smoke.mjs", base]);
 console.log(smoke.out.trim());
 const smokeOk = smoke.ok && /All \d+ probes passed\./.test(smoke.out);
