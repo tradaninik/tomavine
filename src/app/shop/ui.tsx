@@ -496,6 +496,7 @@ export function Nav() {
   const [count, setCount] = useState(0);
   const [user, setUser] = useState<NavUser | null>(null);
   const [q, setQ] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -526,6 +527,7 @@ export function Nav() {
     if (s.length > 0) {
       router.push(`/shop/search?q=${encodeURIComponent(s)}`);
       setQ("");
+      setMenuOpen(false);
     }
   }
 
@@ -541,6 +543,7 @@ export function Nav() {
     }
     setUser(null);
     setLoggingOut(false);
+    setMenuOpen(false);
     router.push("/");
   }
 
@@ -583,7 +586,7 @@ export function Nav() {
                 type="button"
                 onClick={logout}
                 disabled={loggingOut}
-                className="rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#C14E2A] hover:text-[#C14E2A] disabled:opacity-50"
+                className="hidden rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#C14E2A] hover:text-[#C14E2A] disabled:opacity-50 sm:block"
               >
                 {t("logout")}
               </button>
@@ -593,6 +596,15 @@ export function Nav() {
               {t("login")}
             </Link>
           )}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            className="rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#1C3A2A] transition hover:bg-[#F7F3E8] md:hidden"
+          >
+            ☰
+          </button>
           <Link
             href="/shop/cart"
             className="relative inline-flex items-center gap-2 rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]"
@@ -607,6 +619,60 @@ export function Nav() {
           </Link>
         </div>
       </div>
+      {menuOpen ? (
+        <div className="border-t border-[#E4E0CE] bg-white px-4 py-3 md:hidden">
+          <form onSubmit={submitSearch} className="flex items-center gap-2 rounded-full border border-[#D6D2BC] bg-[#F7F3E8] px-4 py-2">
+            <span aria-hidden="true" className="text-sm text-[#8E9A84]">
+              🔍
+            </span>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("search_ph")}
+              aria-label={t("search_ph")}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            />
+          </form>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {user ? (
+              <>
+                <Link
+                  href="/shop/orders"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-xl bg-[#EDF2E6] px-4 py-2.5 text-sm font-semibold text-[#1C3A2A]"
+                >
+                  📦 {t("my_orders")}
+                </Link>
+                {user.role === "ADMIN" ? (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-xl bg-[#EDF2E6] px-4 py-2.5 text-sm font-semibold text-[#1C3A2A]"
+                  >
+                    {t("admin")}
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={logout}
+                  disabled={loggingOut}
+                  className="rounded-xl border border-[#D6D2BC] px-4 py-2.5 text-sm font-semibold text-[#66735F] transition hover:border-[#C14E2A] hover:text-[#C14E2A] disabled:opacity-50"
+                >
+                  {t("logout")}
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-xl bg-[#2F6B3F] px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                {t("login")}
+              </Link>
+            )}
+          </div>
+        </div>
+      ) : null}
       <nav className="border-t border-[#E4E0CE]/60">
         <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 text-sm">
           {NAV_LINKS.map((link) => (
