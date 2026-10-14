@@ -10,11 +10,14 @@
     "postinstall": "prisma generate",
     "seed": "tsx prisma/seed.ts"
   },
-  "prisma": { "seed": "tsx prisma/seed.ts" },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@prisma/client": "^6",
     "@upstash/ratelimit": "^2",
     "@upstash/redis": "^1",
+    "@vercel/blob": "^2.8.2",
     "jose": "^5",
     "next": "16.3.5",
     "react": "19.2.8",
