@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Btn, Card, ErrBox, Loading, StarRow, catEmoji, formatDate, formatDateTime, inr, inputCls, statusTone, toast } from "../../ui";
+import { Btn, Card, CareChips, ErrBox, Loading, StarRow, catEmoji, formatDate, formatDateTime, inr, inputCls, statusTone, toast } from "../../ui";
 import { displayName, useLang } from "@/lib/i18n";
 import { readTrustMeta, formatPromisedDay, localeForLang } from "@/lib/trust";
+import { careChips } from "@/lib/care";
 
 const STATUS_KEYS: Record<string, string> = {
   PENDING: "st_pending",
@@ -105,6 +106,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState(false);
+  const [careByProduct, setCareByProduct] = useState<Record<string, unknown>>({});
 
   const [pickProduct, setPickProduct] = useState("");
   const [pickStars, setPickStars] = useState(0);
@@ -146,6 +148,33 @@ export default function OrderDetailPage() {
     if (order && order.items.length > 0) {
       setPickProduct((prev) => (prev.length > 0 ? prev : order.items[0].productId));
     }
+  }, [order]);
+
+  // Care guidance (v1): load current care data for the ordered products
+  // from the public catalog. Products hidden since purchase fall back to
+  // category defaults, which is fine for a care hint.
+  useEffect(() => {
+    if (!order || order.items.length === 0) {
+      return;
+    }
+    const ids = Array.from(new Set(order.items.map((it) => it.productId))).join(",");
+    let active = true;
+    fetch(`/api/catalog/products?ids=${encodeURIComponent(ids)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data || !Array.isArray(data.products)) {
+          return;
+        }
+        const map: Record<string, unknown> = {};
+        for (const product of data.products) {
+          map[product.id] = product.care;
+        }
+        setCareByProduct(map);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, [order]);
 
   async function submitReview(e: FormEvent<HTMLFormElement>) {
@@ -252,6 +281,11 @@ export default function OrderDetailPage() {
   const showPin = order.deliveryOtp !== null && order.deliveryOtp.length > 0 && order.status !== "DELIVERED" && order.status !== "CANCELLED" && order.status !== "REJECTED";
   const reviewChoices = order.items.filter((it, i, arr) => arr.findIndex((x) => x.productId === it.productId) === i);
   const eventsDesc = [...order.events].reverse();
+  const careRows = order.items.filter(
+    (it, i, arr) =>
+      arr.findIndex((x) => x.productId === it.productId) === i &&
+      careChips(careByProduct[it.productId] ?? null, it.product.category).length > 0
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -323,6 +357,20 @@ export default function OrderDetailPage() {
             ))}
           </div>
         </Card>
+
+        {careRows.length > 0 ? (
+          <Card>
+            <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">🌱 {t("care_title")}</p>
+            <div className="mt-3 space-y-3">
+              {careRows.map((it) => (
+                <div key={it.id}>
+                  <p className="text-sm font-semibold text-[#20291D]">{displayName(it.product.names, lang, it.nameSnap)}</p>
+                  <CareChips care={careByProduct[it.productId] ?? null} category={it.product.category} className="mt-1" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <Card>
           <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">{t("order_summary")}</p>

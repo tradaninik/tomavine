@@ -161,7 +161,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "Order cancelled",
     err_cancel: "Could not cancel — the order may have moved ahead. Refreshing.",
     cancel_note: "You can cancel while the order is pending or confirmed.",
-        // ── subcategories + category copy (S9) ──
+    care_title: "Care guide",
+    care_sun: "Sunlight",
+    care_water: "Watering",
+    care_soil: "Soil",     
+    // ── subcategories + category copy (S9) ──
     sub_all: "All",
     sub_indoor: "Indoor",
     sub_flowering: "Flowering",
@@ -389,7 +393,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ऑर्डर रद्द हो गया",
     err_cancel: "रद्द नहीं हो सका — ऑर्डर आगे बढ़ गया होगा। ताज़ा किया जा रहा है।",
     cancel_note: "पुष्टि प्रतीक्षित या पुष्ट ऑर्डर ही रद्द कर सकते हैं।",
-        // ── subcategories + category copy (S9) ──
+    care_title: "देखभाल गाइड",
+    care_sun: "धूप",
+    care_water: "पानी",
+    care_soil: "मिट्टी",
+    // ── subcategories + category copy (S9) ──
     sub_all: "सभी",
     sub_indoor: "इनडोर",
     sub_flowering: "फूलदार",
@@ -617,7 +625,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ఆర్డర్ రద్దైంది",
     err_cancel: "రద్దు కాలేదు — ఆర్డర్ ముందుకు వెళ్ళి ఉండవచ్చు. రిఫ్రెష్ అవుతోంది.",
     cancel_note: "ధృవీకరణ వేచి ఉన్న లేదా ధృవీకరించిన ఆర్డర్‌లను మాత్రమే రద్దు చేయవచ్చు.",
-        // ── subcategories + category copy (S9) ──
+    care_title: "సంరక్షణ గైడ్",
+    care_sun: "ఎండ",
+    care_water: "నీరు",
+    care_soil: "నేల",  
+    // ── subcategories + category copy (S9) ──
     sub_all: "అన్నీ",
     sub_indoor: "ఇండోర్",
     sub_flowering: "పుష్పించే",
@@ -845,7 +857,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ಆರ್ಡರ್ ರದ್ದಾಯಿತು",
     err_cancel: "ರದ್ದು ಮಾಡಲಾಗಲಿಲ್ಲ — ಆರ್ಡರ್ ಮುಂದೆ ಹೋಗಿರಬಹುದು. ರಿಫ್ರೆಶ್ ಆಗುತ್ತಿದೆ.",
     cancel_note: "ದೃಢೀಕರಣ ಬಾಕಿ ಅಥವಾ ದೃಢೀಕೃತ ಆರ್ಡರ್‌ಗಳನ್ನು ಮಾತ್ರ ರದ್ದು ಮಾಡಬಹುದು.",
-        // ── subcategories + category copy (S9) ──
+    care_title: "ಆರೈಕೆ ಮಾರ್ಗದರ್ಶಿ",
+    care_sun: "ಬಿಸಿಲು",
+    care_water: "ನೀರು",
+    care_soil: "ಮಣ್ಣು",
+    // ── subcategories + category copy (S9) ──
     sub_all: "ಎಲ್ಲಾ",
     sub_indoor: "ಒಳಾಂಗಣ",
     sub_flowering: "ಹೂ ಬಿಡುವ",
@@ -1073,7 +1089,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ஆர்டர் ரத்து செய்யப்பட்டது",
     err_cancel: "ரத்து செய்ய முடியவில்லை — ஆர்டர் முன்னேறியிருக்கலாம். புதுப்பிக்கப்படுகிறது.",
     cancel_note: "உறுதி நிலுவையில் அல்லது உறுதியான ஆர்டர்களை மட்டுமே ரத்து செய்யலாம்.",
-        // ── subcategories + category copy (S9) ──
+    care_title: "பராமரிப்பு வழிகாட்டி",
+    care_sun: "வெயில்",
+    care_water: "நீர்",
+    care_soil: "மண்",
+    // ── subcategories + category copy (S9) ──
     sub_all: "அனைத்தும்",
     sub_indoor: "உள்புற",
     sub_flowering: "பூக்கும்",
@@ -1301,7 +1321,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     cancel_ok: "ऑर्डर रद्द झाले",
     err_cancel: "रद्द करता आले नाही — ऑर्डर पुढे गेले असेल. रिफ्रेश करत आहोत.",
     cancel_note: "पुष्टी प्रलंबित किंवा पुष्ट झालेले ऑर्डरच रद्द करता येतात.",
-        // ── subcategories + category copy (S9) ──
+    care_title: "काळजी गाईड",
+    care_sun: "सूर्यप्रकाश",
+    care_water: "पाणी",
+    care_soil: "माती",
+    // ── subcategories + category copy (S9) ──
     sub_all: "सर्व",
     sub_indoor: "इनडूर",
     sub_flowering: "फुलणारे",

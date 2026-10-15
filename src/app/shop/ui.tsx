@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { CART_EVENT, MAX_QTY, addToCart, cartCount, displayPriceOf, loadCart, setQty } from "@/lib/cart";
 import { LangPill, displayName, useLang } from "@/lib/i18n";
+import { careChips } from "@/lib/care";
 import type { ProductCard } from "@/lib/catalog";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -232,10 +233,12 @@ export function StarInput({ value, onChange }: { value: number; onChange: (stars
 
 export function ProductThumb({
   category,
+  image,
   size = "md",
   className = "",
 }: {
   category: string;
+  image?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -245,8 +248,43 @@ export function ProductThumb({
     lg: "h-44 w-44 text-6xl",
   };
   return (
-    <div className={`flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30 ${sizes[size]} ${className}`}>
-      <span aria-hidden="true">{catEmoji(category)}</span>
+    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30 ${sizes[size]} ${className}`}>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span aria-hidden="true">{catEmoji(category)}</span>
+      )}
+    </div>
+  );
+}
+
+export function CareChips({
+  care,
+  category,
+  className = "",
+}: {
+  care: unknown;
+  category: string;
+  className?: string;
+}) {
+  const { t } = useLang();
+  const chips = careChips(care, category);
+  if (chips.length === 0) {
+    return null;
+  }
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${className}`}>
+      {chips.map((c) => (
+        <span
+          key={c.labelKey}
+          title={t(c.labelKey)}
+          className="inline-flex items-center gap-1 rounded-full bg-[#EDF2E6] px-2 py-0.5 text-[11px] font-medium text-[#24562F]"
+        >
+          <span aria-hidden="true">{c.icon}</span>
+          <span>{c.value}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -397,9 +435,14 @@ export function ProductTile({ p }: { p: ProductCard }) {
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-[#E4E0CE] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
       <Link href={`/shop/product/${p.id}`} className="relative block aspect-square overflow-hidden bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/30">
-        <span className="absolute inset-0 flex items-center justify-center text-6xl transition-transform duration-300 group-hover:scale-110" aria-hidden="true">
-          {catEmoji(p.category)}
-        </span>
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image} alt={name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center text-6xl transition-transform duration-300 group-hover:scale-110" aria-hidden="true">
+            {catEmoji(p.category)}
+          </span>
+        )}
         {p.rescue && dp.before > dp.now ? (
           <span className="absolute left-3 top-3 rounded-full bg-[#C14E2A] px-2.5 py-0.5 text-xs font-bold text-white shadow">
             🏷️ −{p.rescue.pct}%

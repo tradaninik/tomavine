@@ -22,6 +22,7 @@ export type ProductCard = {
   names: Record<string, string> | null;
   category: string;
   botanical: string | null;
+  care: Record<string, string> | null;
   priceMin: number;
   mrp: number;
   stock: number;
@@ -68,6 +69,10 @@ export function productCard(p: ProductWithRelations): ProductCard {
     names: p.names as Record<string, string> | null,
     category: p.category,
     botanical: p.botanical,
+    care:
+      p.care !== null && typeof p.care === "object" && !Array.isArray(p.care)
+        ? (p.care as Record<string, string>)
+        : null,
     priceMin: p.priceMin,
     mrp: p.mrp,
     stock: p.stock,

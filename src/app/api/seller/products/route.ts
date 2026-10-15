@@ -50,6 +50,7 @@ export async function PATCH(request: Request) {
     stock?: number;
     hidden?: boolean;
     subCategory?: string;
+    care?: unknown;
     rescue?: { pct: number; days: number } | null;
   };
 
@@ -74,7 +75,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  const data: { nameEn?: string; priceMin?: number; mrp?: number; stock?: number; hidden?: boolean; subCategory?: string | null } = {};
+  const data: {
+    nameEn?: string;
+    priceMin?: number;
+    mrp?: number;
+    stock?: number;
+    hidden?: boolean;
+    subCategory?: string | null;
+    care?: Prisma.ProductUpdateInput["care"];
+  } = {};
 
   if (typeof body.nameEn === "string") {
     const name = body.nameEn.trim();
@@ -119,6 +128,27 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unknown subcategory for this category" }, { status: 400 });
     } else {
       data.subCategory = body.subCategory;
+    }
+  }
+
+  if (body.care !== undefined) {
+    if (body.care === null) {
+      data.care = Prisma.DbNull;
+    } else if (typeof body.care === "object" && !Array.isArray(body.care)) {
+      const src = body.care as Record<string, unknown>;
+      const clean: Record<string, string> = {};
+      for (const key of ["sun", "soil", "water"]) {
+        const val = typeof src[key] === "string" ? (src[key] as string).trim() : "";
+        if (val.length > 0) {
+          if (val.length > 80) {
+            return NextResponse.json({ error: "Care tips must be 80 characters or fewer" }, { status: 400 });
+          }
+          clean[key] = val;
+        }
+      }
+      data.care = Object.keys(clean).length > 0 ? (clean as Prisma.InputJsonValue) : Prisma.DbNull;
+    } else {
+      return NextResponse.json({ error: "Care must be an object" }, { status: 400 });
     }
   }
 

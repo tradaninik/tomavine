@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Btn, Card, Empty, Loading, Pill, ProductThumb, SectionTitle, inr, toast } from "../ui";
+import { Btn, Card, CareChips, Empty, Loading, Pill, ProductThumb, SectionTitle, inr, toast } from "../ui";
 import { displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 import { FREE_DELIVERY_AT, computeTotals, displayPriceOf, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
@@ -96,12 +96,13 @@ export default function CartPage() {
                   const priceBefore = displayPriceOf(l.product, l.variantId).before;
                   return (
                     <div key={l.product.id + (l.variantId ?? "")} className="flex gap-3 py-4">
-                      <ProductThumb category={l.product.category} size="sm" />
+                      <ProductThumb category={l.product.category} image={l.product.image} size="sm" />
                       <div className="min-w-0 flex-1">
                         <Link href={`/shop/product/${l.product.id}`} className="line-clamp-2 text-sm font-semibold text-[#20291D] hover:underline">
                           {name}
                         </Link>
                         {l.variant ? <p className="text-xs text-[#66735F]">{l.variant.label}</p> : null}
+                        <CareChips care={l.product.care} category={l.product.category} className="mt-1.5" />
                         {low ? (
                           <div className="mt-1">
                             <Pill tone="rose">{t("only_left", { n: l.product.stock })}</Pill>
