@@ -28,6 +28,8 @@ export type CartProduct = {
   id: string;
   nameEn: string;
   names?: Record<string, string> | null; // NEW: regional names (supplied by the catalog API; optional)
+  image?: string | null; // product photo (supplied by the catalog lookup; optional)
+  care?: Record<string, string> | null; // care info, e.g. { sun, water, soil } (supplied by the catalog lookup; optional)
   category: string;
   priceMin: number;
   stock: number;
