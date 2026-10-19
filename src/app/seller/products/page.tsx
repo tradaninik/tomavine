@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ChangeEvent } from "react";
 import { Btn, Card, Pill, inr } from "../ui";
 import { displayPriceOf } from "@/lib/cart";
 import { subOptionsFor, subLabel } from "@/lib/subcategories";
@@ -26,6 +27,8 @@ type Product = {
   mrp: number;
   stock: number;
   hidden: boolean;
+  image: string | null;
+  care: Record<string, string> | null;
   variants: Variant[];
   rescue: Rescue | null;
 };
@@ -45,6 +48,10 @@ type FormState = {
   price: string;
   mrp: string;
   stock: string;
+  sub: string;
+  careSun: string;
+  careSoil: string;
+  careWater: string;
   hidden: boolean;
   rescueOn: boolean;
   rescuePct: string;
@@ -56,6 +63,10 @@ const EMPTY_FORM: FormState = {
   price: "",
   mrp: "",
   stock: "",
+  sub: "",
+  careSun: "",
+  careSoil: "",
+  careWater: "",
   hidden: false,
   rescueOn: false,
   rescuePct: "30",
@@ -86,6 +97,8 @@ const ALL_CATS: { v: string; label: string; plain: string }[] = [
   { v: "tools", label: "🛠️ Tools", plain: "tools" },
 ];
 
+const CARE_CATS = ["plants", "saplings"];
+
 function trayLabel(traySize: string): string {
   const m = /(\d+)/.exec(traySize);
   return m ? `Tray of ${m[1]}` : traySize;
@@ -103,6 +116,53 @@ function groupTerms(terms: TaxTerm[]): { name: string; items: TaxTerm[] }[] {
     }
   }
   return groups;
+}
+
+// Client-side compression guardrail: resize to max 800px and re-encode
+// as JPEG (~60–150 KB typically) before uploading to Vercel Blob.
+function compressPhoto(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const maxDim = 800;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("Could not process image"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(url);
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Could not process image"));
+            }
+          },
+          "image/jpeg",
+          0.72
+        );
+      } catch {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not process image"));
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read image"));
+    };
+    img.src = url;
+  });
 }
 
 export default function SellerProductsPage() {
@@ -123,6 +183,9 @@ export default function SellerProductsPage() {
   const [newPrice, setNewPrice] = useState("");
   const [newMrp, setNewMrp] = useState("");
   const [newStock, setNewStock] = useState("");
+  const [newCareSun, setNewCareSun] = useState("");
+  const [newCareSoil, setNewCareSoil] = useState("");
+  const [newCareWater, setNewCareWater] = useState("");
   const [newVariety, setNewVariety] = useState("");
   const [newPlantType, setNewPlantType] = useState("");
   const [newSize, setNewSize] = useState("");
@@ -135,6 +198,8 @@ export default function SellerProductsPage() {
   const [createError, setCreateError] = useState("");
   const [createOk, setCreateOk] = useState("");
   const [allowedCats, setAllowedCats] = useState<string[] | null>(null);
+  const [photoBusyId, setPhotoBusyId] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,12 +272,17 @@ export default function SellerProductsPage() {
   }
 
   function startEdit(p: Product) {
+    const c: Record<string, string> = p.care && typeof p.care === "object" ? p.care : {};
     setEditingId(p.id);
     setForm({
       name: p.nameEn,
       price: String(p.priceMin),
       mrp: String(p.mrp),
       stock: String(p.stock),
+      sub: p.subCategory ?? "",
+      careSun: typeof c.sun === "string" ? c.sun : "",
+      careSoil: typeof c.soil === "string" ? c.soil : "",
+      careWater: typeof c.water === "string" ? c.water : "",
       hidden: p.hidden,
       rescueOn: p.rescue !== null,
       rescuePct: p.rescue ? String(p.rescue.pct) : "30",
@@ -227,12 +297,24 @@ export default function SellerProductsPage() {
       mrp: Number(form.mrp),
       stock: Number(form.stock),
       hidden: form.hidden,
+      subCategory: form.sub,
     };
 
     if (form.rescueOn) {
       payload.rescue = { pct: Number(form.rescuePct), days: Number(form.rescueDays) };
     } else if (p.rescue) {
       payload.rescue = null;
+    }
+
+    // Care: send when something is entered, or when the product
+    // already had care (so emptying the fields clears it).
+    const careClean: Record<string, string> = {};
+    if (form.careSun.trim()) careClean.sun = form.careSun.trim();
+    if (form.careSoil.trim()) careClean.soil = form.careSoil.trim();
+    if (form.careWater.trim()) careClean.water = form.careWater.trim();
+    const hadCare = p.care !== null && typeof p.care === "object" && Object.keys(p.care).length > 0;
+    if (Object.keys(careClean).length > 0 || hadCare) {
+      payload.care = Object.keys(careClean).length > 0 ? careClean : null;
     }
 
     const ok = await patch(p.id, payload);
@@ -272,6 +354,9 @@ export default function SellerProductsPage() {
     setInputNote("");
     setNewNames({});
     setNewAgri(null);
+    setNewCareSun("");
+    setNewCareSoil("");
+    setNewCareWater("");
   }
 
   function pickVariety(id: string) {
@@ -334,6 +419,9 @@ export default function SellerProductsPage() {
     setNewPrice("");
     setNewMrp("");
     setNewStock("");
+    setNewCareSun("");
+    setNewCareSoil("");
+    setNewCareWater("");
     setNewVariety("");
     setNewPlantType("");
     setNewSize("");
@@ -343,6 +431,38 @@ export default function SellerProductsPage() {
     setNewAgri(null);
     setNewVariants([]);
     setCreateError("");
+  }
+
+  async function onPhotoPick(p: Product, e: ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files && input.files.length > 0 ? input.files[0] : null;
+    input.value = "";
+    if (!file) return;
+    if (file.type !== "image/jpeg" && file.type !== "image/png" && file.type !== "image/webp" && file.type !== "image/heic" && file.type !== "image/heif") {
+      setPhotoError("That file is not a photo — pick a JPEG, PNG or WebP image.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setPhotoError("That photo is too large — pick one under 8 MB.");
+      return;
+    }
+    setPhotoError("");
+    setPhotoBusyId(p.id);
+    try {
+      const compressed = await compressPhoto(file);
+      const fd = new FormData();
+      fd.append("file", compressed, "photo.jpg");
+      const res = await fetch(`/api/seller/products/${p.id}/image`, { method: "POST", body: fd });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        throw new Error(data && typeof data.error === "string" ? data.error : "Upload failed");
+      }
+      await load();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setPhotoBusyId(null);
+    }
   }
 
   async function createProduct() {
@@ -422,6 +542,15 @@ export default function SellerProductsPage() {
     if (newCat === "saplings" && newAgri) {
       payload.agri = newAgri;
     }
+    if (CARE_CATS.includes(newCat)) {
+      const care: Record<string, string> = {};
+      if (newCareSun.trim()) care.sun = newCareSun.trim();
+      if (newCareSoil.trim()) care.soil = newCareSoil.trim();
+      if (newCareWater.trim()) care.water = newCareWater.trim();
+      if (Object.keys(care).length > 0) {
+        payload.care = care;
+      }
+    }
 
     setCreating(true);
     try {
@@ -437,7 +566,7 @@ export default function SellerProductsPage() {
         throw new Error(data.error ?? "Create failed");
       }
 
-      setCreateOk(`Added “${name}”.`);
+      setCreateOk(`Added "${name}".`);
       resetNew();
       await load();
     } catch (e) {
@@ -461,6 +590,7 @@ export default function SellerProductsPage() {
       </div>
 
       {error ? <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p> : null}
+      {photoError ? <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">📷 {photoError}</p> : null}
 
       {newOpen ? (
         <Card>
@@ -671,6 +801,44 @@ export default function SellerProductsPage() {
             </label>
           </div>
 
+          {CARE_CATS.includes(newCat) ? (
+            <div className="mt-3">
+              <p className="text-sm font-medium text-[#1C3A2A]">Care guide (optional — shown on the buyer's cart and order page)</p>
+              <div className="mt-1 grid gap-3 sm:grid-cols-3">
+                <label className="text-sm font-medium text-[#1C3A2A]">
+                  ☀️ Sunlight
+                  <input
+                    className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                    value={newCareSun}
+                    onChange={(e) => setNewCareSun(e.target.value)}
+                    maxLength={80}
+                    placeholder="e.g. Bright indirect light"
+                  />
+                </label>
+                <label className="text-sm font-medium text-[#1C3A2A]">
+                  💧 Watering
+                  <input
+                    className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                    value={newCareWater}
+                    onChange={(e) => setNewCareWater(e.target.value)}
+                    maxLength={80}
+                    placeholder="e.g. Every 2–3 days"
+                  />
+                </label>
+                <label className="text-sm font-medium text-[#1C3A2A]">
+                  🪴 Soil
+                  <input
+                    className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                    value={newCareSoil}
+                    onChange={(e) => setNewCareSoil(e.target.value)}
+                    maxLength={80}
+                    placeholder="e.g. Well-draining mix"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-3">
             <p className="text-sm font-medium text-[#1C3A2A]">Variants / pack sizes (optional — SKUs are generated automatically)</p>
             {newVariants.map((v, i) => (
@@ -733,6 +901,27 @@ export default function SellerProductsPage() {
               </Btn>
             </div>
 
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {p.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.image} alt={p.nameEn} className="h-14 w-14 rounded-xl border border-[#1C3A2A]/10 object-cover" />
+              ) : null}
+              <label
+                className={`cursor-pointer rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#1C3A2A] transition hover:border-[#2F6B3F] ${
+                  photoBusyId === p.id ? "pointer-events-none opacity-50" : ""
+                }`}
+              >
+                📷 {p.image ? "Replace photo" : "Add photo"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => onPhotoPick(p, e)}
+                />
+              </label>
+              {photoBusyId === p.id ? <span className="text-xs font-medium text-[#66735F]">Uploading…</span> : null}
+            </div>
+
             <p className="mt-3 text-sm text-[#1C3A2A]/70">
               From {inr(dp.now)}
               {dp.before > dp.now ? (
@@ -787,6 +976,22 @@ export default function SellerProductsPage() {
                   />
                 </label>
 
+                <label className="block text-sm font-medium text-[#1C3A2A]">
+                  Subcategory
+                  <select
+                    className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                    value={form.sub}
+                    onChange={(e) => setForm({ ...form, sub: e.target.value })}
+                  >
+                    <option value="">— none —</option>
+                    {subOptionsFor(p.category).map((s) => (
+                      <option key={s.v} value={s.v}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="text-sm font-medium text-[#1C3A2A]">
                     Price (₹)
@@ -816,6 +1021,41 @@ export default function SellerProductsPage() {
                     />
                   </label>
                 </div>
+
+                {CARE_CATS.includes(p.category) ? (
+                  <div>
+                    <p className="text-sm font-medium text-[#1C3A2A]">Care guide (shown on the buyer's cart and order page)</p>
+                    <div className="mt-1 grid gap-3 sm:grid-cols-3">
+                      <label className="text-sm font-medium text-[#1C3A2A]">
+                        ☀️ Sunlight
+                        <input
+                          className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                          value={form.careSun}
+                          onChange={(e) => setForm({ ...form, careSun: e.target.value })}
+                          maxLength={80}
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-[#1C3A2A]">
+                        💧 Watering
+                        <input
+                          className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                          value={form.careWater}
+                          onChange={(e) => setForm({ ...form, careWater: e.target.value })}
+                          maxLength={80}
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-[#1C3A2A]">
+                        🪴 Soil
+                        <input
+                          className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                          value={form.careSoil}
+                          onChange={(e) => setForm({ ...form, careSoil: e.target.value })}
+                          maxLength={80}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
 
                 <label className="flex items-center gap-2 text-sm font-medium text-[#1C3A2A]">
                   <input
