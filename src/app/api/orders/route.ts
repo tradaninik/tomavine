@@ -46,40 +46,89 @@ export async function POST(req: Request) {
     groups.set(prod.nurseryId, g);
   }
 
-  const results = [];
-  for (const [nurseryId, g] of groups) {
-    const deliveryFee = mode === "PICKUP" ? 0 : g.sub >= 499 ? 0 : 49;
-    const total = g.sub + deliveryFee + g.tax + (paymentMethod === "cod" ? 25 : 0);
-    let order;
-    try {
-      order = await db.$transaction(async (tx) => {
+  // One transaction for EVERY group: either the whole cart becomes
+  // orders or nothing does. (Previously each group committed
+  // separately — a mid-cart stock failure left earlier groups sold.)
+  let orders;
+  try {
+    orders = await db.$transaction(async (tx) => {
+      for (const g of groups.values()) {
         for (const item of g.items) {  // atomic stock decrement — oversell throws
           const r = await tx.product.updateMany({ where: { id: item.productId, stock: { gte: item.qty } }, data: { stock: { decrement: item.qty } } });
           if (r.count === 0) throw new Error(`STOCK:${item.nameSnap}`);
         }
-        const seq = 1810 + (await tx.order.count());
-        return await tx.order.create({ data: {
-          code: `NH-${new Date().getFullYear()}-${seq}`,
+      }
+      const year = new Date().getFullYear();
+      const seq = 1810 + (await tx.order.count());
+      const created: any[] = [];
+      let i = 0;
+      for (const [nurseryId, g] of groups) {
+        const deliveryFee = mode === "PICKUP" ? 0 : g.sub >= 499 ? 0 : 49;
+        const total = g.sub + deliveryFee + g.tax + (paymentMethod === "cod" ? 25 : 0);
+        const order = await tx.order.create({ data: {
+          code: `NH-${year}-${seq + i++}`,
           userId: session.payload.sub!, nurseryId, status: "PENDING", mode,
           subtotal: g.sub, deliveryFee, tax: g.tax, total, address,
           items: { create: g.items },
           events: { create: { status: "PENDING", actorRole: "CUSTOMER", note: paymentMethod === "cod" ? "COD" : "Online" } },
         } });
-      });
-    } catch (e: any) {
-      return NextResponse.json({ error: "out_of_stock", item: String(e.message).replace("STOCK:", "") }, { status: 409 });
+        // Payment row inside the tx: the idempotency record commits
+        // atomically with the order, so a crash between order-create
+        // and payment-create can never duplicate on retry.
+        await tx.payment.create({ data: { orderId: order.id, method: paymentMethod, amount: total, status: "CREATED", idempotencyKey: `${idem}:${nurseryId}` } });
+        created.push(order);
+      }
+      return created;
+    });
+  } catch (e: any) {
+    if (e?.code === "P2002") {
+      // Concurrent double-submit on the same key — the other request
+      // won; report a duplicate, not an error.
+      const again = await db.payment.findFirst({ where: { idempotencyKey: { startsWith: idem } } });
+      if (again) return NextResponse.json({ ok: true, duplicate: true });
     }
-    await db.payment.create({ data: { orderId: order.id, method: paymentMethod, amount: total, status: "CREATED", idempotencyKey: `${idem}:${nurseryId}` } });
-
-    if (paymentMethod !== "cod" && process.env.RAZORPAY_KEY_ID) {
-      const rzp = await fetch("https://api.razorpay.com/v1/orders", { method: "POST",
-        headers: { Authorization: `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_SECRET}`).toString("base64")}` },
-        body: JSON.stringify({ amount: total * 100, currency: "INR", receipt: order.code }) }).then(r => r.json());
-      await db.payment.update({ where: { orderId: order.id }, data: { rzpOrderId: rzp.id } });
-      results.push({ code: order.code, amount: total, rzpOrderId: rzp.id });
-    } else results.push({ code: order.code, amount: total });
-
-    await notifySellerNewOrder(order.id);
+    const msg = String(e?.message ?? "");
+    if (msg.startsWith("STOCK:")) {
+      return NextResponse.json({ error: "out_of_stock", item: msg.replace("STOCK:", "") }, { status: 409 });
+    }
+    console.error("checkout failed", e);
+    return NextResponse.json({ error: "order_failed" }, { status: 500 });
   }
+
+  const results = [];
+  for (const order of orders) {
+    if (paymentMethod !== "cod" && process.env.RAZORPAY_KEY_ID) {
+      let rzpId: string | null = null;
+      try {
+        const r = await fetch("https://api.razorpay.com/v1/orders", { method: "POST",
+          headers: { Authorization: `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_SECRET}`).toString("base64")}` },
+          body: JSON.stringify({ amount: order.total * 100, currency: "INR", receipt: order.code }) });
+        const rzp = await r.json();
+        if (rzp && typeof rzp.id === "string") rzpId = rzp.id;
+      } catch { rzpId = null; }
+      if (rzpId) {
+        await db.payment.update({ where: { orderId: order.id }, data: { rzpOrderId: rzpId } });
+        results.push({ code: order.code, amount: order.total, rzpOrderId: rzpId });
+      } else {
+        // Order stands; payment init failed (bad keys / network / Razorpay
+        // down). Flag it so checkout can tell the buyer instead of
+        // silently handing the page an undefined rzpOrderId.
+        await db.payment.update({ where: { orderId: order.id }, data: { status: "FAILED" } });
+        results.push({ code: order.code, amount: order.total, payInitFailed: true });
+      }
+    } else {
+      results.push({ code: order.code, amount: order.total });
+    }
+  }
+
+  for (const order of orders) {
+    try {
+      await notifySellerNewOrder(order.id);
+    } catch (e) {
+      // A notification failure must never fail a committed checkout.
+      console.error("notifySellerNewOrder failed for " + order.code, e);
+    }
+  }
+
   return NextResponse.json({ ok: true, orders: results, keyId: process.env.RAZORPAY_KEY_ID ?? null });
 }

@@ -69,6 +69,7 @@ export async function PATCH(request: Request) {
 
   const order = await db.order.findFirst({
     where: { id: id, nurseryId: nursery.id },
+    include: { items: true, payment: true },
   });
 
   if (!order) {
@@ -79,6 +80,7 @@ export async function PATCH(request: Request) {
   let note = "";
   let deliveryOtp: string | null = null;
   let metaPatch: Record<string, string | number | boolean> | null = null;
+  let restoreStock = false;
 
   if (action === "accept") {
     if (order.status !== OrderStatus.PENDING) {
@@ -106,6 +108,7 @@ export async function PATCH(request: Request) {
     }
     nextStatus = OrderStatus.REJECTED;
     note = "Order rejected by seller";
+    restoreStock = true;
   } else if (action === "out") {
     if (order.status !== OrderStatus.CONFIRMED && order.status !== OrderStatus.PREPARING) {
       return NextResponse.json({ error: "Only confirmed orders can go out for delivery" }, { status: 400 });
@@ -145,19 +148,41 @@ export async function PATCH(request: Request) {
     updateData.meta = metaPatch as Prisma.InputJsonValue;
   }
 
-  await db.order.update({
-    where: { id: order.id },
-    data: updateData,
-  });
+  if (restoreStock) {
+    // A rejected order never ships — give the stock back in the SAME
+    // transaction that flips the status, so the two can never disagree
+    // (previously rejection left stock decremented forever).
+    await db.$transaction(async (tx) => {
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.qty } },
+        });
+      }
+      await tx.order.update({ where: { id: order.id }, data: updateData });
+      await tx.orderEvent.create({
+        data: { orderId: order.id, status: nextStatus, note: note, actorRole: Role.SELLER },
+      });
+    });
+  } else {
+    await db.order.update({ where: { id: order.id }, data: updateData });
 
-  await db.orderEvent.create({
-    data: {
-      orderId: order.id,
-      status: nextStatus,
-      note: note,
-      actorRole: Role.SELLER,
-    },
-  });
+    await db.orderEvent.create({
+      data: { orderId: order.id, status: nextStatus, note: note, actorRole: Role.SELLER },
+    });
+  }
+
+  // Payment bookkeeping for terminal transitions:
+  //  - reject: a CREATED payment will never be collected -> FAILED
+  //  - delivered + COD: cash collected at the door -> PAID
+  // Online payments are settled by the Razorpay webhook only, never here.
+  if (order.payment) {
+    if (action === "reject" && order.payment.status === "CREATED") {
+      await db.payment.update({ where: { id: order.payment.id }, data: { status: "FAILED" } });
+    } else if (action === "delivered" && order.payment.method === "cod" && order.payment.status === "CREATED") {
+      await db.payment.update({ where: { id: order.payment.id }, data: { status: "PAID", capturedAt: new Date() } });
+    }
+  }
 
   try {
     await buyerUpdate(order.id);
