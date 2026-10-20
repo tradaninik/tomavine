@@ -63,3 +63,15 @@ export async function requireRole(...roles: string[]) {   // RBAC gate for every
     throw new Response("Forbidden", { status: 403 });
   return s;
 }
+
+
+// Razorpay checkout success handler: HMAC-SHA256 over "rzpOrderId|rzpPaymentId"
+// using the KEY secret (not the webhook secret). Fail-closed when unconfigured.
+export function verifyRazorpayCheckout(rzpOrderId: string, rzpPaymentId: string, signature: string): boolean {
+  const secret = process.env.RAZORPAY_SECRET;
+  if (!secret) {
+    return false;
+  }
+  const expected = crypto.createHmac("sha256", secret).update(`${rzpOrderId}|${rzpPaymentId}`).digest("hex");
+  return expected === signature;
+}

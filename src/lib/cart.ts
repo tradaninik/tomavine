@@ -233,7 +233,7 @@ export function displayPriceOf(
   return { now: before, before: before };
 }
 
-export function computeTotals(lines: CartLine[], products: CartProduct[], mode: "DELIVERY" | "PICKUP"): CartTotals {
+export function computeTotals(lines: CartLine[], products: CartProduct[], mode: "DELIVERY" | "PICKUP", payMethod: "cod" | "online" = "cod"): CartTotals {
   const byId = new Map<string, CartProduct>();
   for (const p of products) {
     byId.set(p.id, p);
@@ -282,7 +282,7 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
     } else {
       group.deliveryFee = DELIVERY_FEE;
     }
-    group.codFee = COD_FEE;
+    group.codFee = payMethod === "cod" ? COD_FEE : 0;
     group.total = group.sub + group.deliveryFee + group.tax + group.codFee;
     sub += group.sub;
     tax += group.tax;

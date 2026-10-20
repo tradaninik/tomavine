@@ -15,6 +15,15 @@ const STORE_KEY = "tv_orders_last";
 
 type Me = { name: string | null; phone: string; city: string | null; pincode: string | null } | null;
 
+type PlacedOrder = {
+  code: string;
+  amount: number;
+  rzpOrderId?: string;
+  payInitFailed?: boolean;
+};
+
+type PopupResult = "paid" | "dismissed" | "verify_failed" | "no_script";
+
 function newIdemKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -56,6 +65,7 @@ export default function CheckoutPage() {
   const [me, setMe] = useState<Me>(null);
   const [meChecked, setMeChecked] = useState(false);
   const [mode, setMode] = useState<"DELIVERY" | "PICKUP">("DELIVERY");
+  const [payMethod, setPayMethod] = useState<"online" | "cod">("cod");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [house, setHouse] = useState("");
@@ -64,6 +74,8 @@ export default function CheckoutPage() {
   const [pincode, setPincode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [payProblem, setPayProblem] = useState("");
+  const [placedCodes, setPlacedCodes] = useState<string[]>([]);
   const [idemKey] = useState<string>(newIdemKey);
 
   useEffect(() => {
@@ -117,14 +129,110 @@ export default function CheckoutPage() {
     };
   }, []);
 
+  // Load Razorpay checkout.js once (needed for the online payment popup).
+  useEffect(() => {
+    if (document.getElementById("rzp-checkout-script")) {
+      return;
+    }
+    const s = document.createElement("script");
+    s.id = "rzp-checkout-script";
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    document.body.appendChild(s);
+  }, []);
+
   const missing = missingLines(lines, products);
-  const totals = computeTotals(lines, products, mode);
+  const totals = computeTotals(lines, products, mode, payMethod);
   const formValid =
     name.trim().length >= 2 &&
     /^[6-9]\d{9}$/.test(phone.trim()) &&
     house.trim().length >= 1 &&
     city.trim().length >= 2 &&
     /^[1-9]\d{5}$/.test(pincode.trim());
+
+  async function verifyWithServer(
+    resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
+  ): Promise<boolean> {
+    try {
+      const r = await fetch("/api/payments/razorpay/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rzpOrderId: resp.razorpay_order_id,
+          rzpPaymentId: resp.razorpay_payment_id,
+          signature: resp.razorpay_signature,
+        }),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function openPopup(order: PlacedOrder, keyId: string): Promise<PopupResult> {
+    return new Promise((resolve) => {
+      const Rzp = (window as unknown as { Razorpay?: new (o: unknown) => { open: () => void } }).Razorpay;
+      if (!Rzp) {
+        resolve("no_script");
+        return;
+      }
+      const rzp = new Rzp({
+        key: keyId,
+        amount: order.amount * 100,
+        currency: "INR",
+        name: "Tomavine",
+        description: order.code,
+        order_id: order.rzpOrderId,
+        prefill: { name: name.trim(), contact: phone.trim() },
+        theme: { color: "#2F6B3F" },
+        handler: (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          verifyWithServer(resp).then((ok) => resolve(ok ? "paid" : "verify_failed"));
+        },
+        modal: {
+          ondismiss: () => resolve("dismissed"),
+        },
+      });
+      rzp.open();
+    });
+  }
+
+  async function runOnlinePayment(orders: PlacedOrder[], keyId: string | null) {
+    const payable = orders.filter((o) => o.rzpOrderId);
+    const codes = orders.map((o) => o.code);
+    const stopWith = (msg: string) => {
+      setLines([]);
+      setPlacedCodes(codes);
+      setPayProblem(msg);
+    };
+
+    if (orders.some((o) => o.payInitFailed) || payable.length === 0) {
+      stopWith(t("pay_init_failed"));
+      return;
+    }
+    if (!keyId || typeof (window as unknown as { Razorpay?: unknown }).Razorpay !== "function") {
+      stopWith(t("pay_init_failed"));
+      return;
+    }
+
+    for (const order of payable) {
+      const result = await openPopup(order, keyId);
+      if (result === "dismissed") {
+        stopWith(t("pay_window_closed"));
+        return;
+      }
+      if (result === "verify_failed") {
+        stopWith(t("pay_verify_failed"));
+        return;
+      }
+      if (result === "no_script") {
+        stopWith(t("pay_init_failed"));
+        return;
+      }
+    }
+
+    window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false }));
+    router.push("/shop/success");
+  }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -152,7 +260,7 @@ export default function CheckoutPage() {
             city: city.trim(),
             pincode: pincode.trim(),
           },
-          paymentMethod: "cod",
+          paymentMethod: payMethod === "cod" ? "cod" : "upi",
         }),
       });
       const data = await res.json().catch(() => null);
@@ -171,11 +279,19 @@ export default function CheckoutPage() {
         return;
       }
       clearCart();
-      const payload = {
-        orders: data && Array.isArray(data.orders) ? data.orders : [],
-        duplicate: data ? data.duplicate === true : false,
-      };
-      window.sessionStorage.setItem(STORE_KEY, JSON.stringify(payload));
+      const orders: PlacedOrder[] = data && Array.isArray(data.orders) ? data.orders : [];
+      const duplicate = data ? data.duplicate === true : false;
+
+      if (duplicate) {
+        window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders: [], duplicate: true }));
+        router.push("/shop/success");
+        return;
+      }
+      if (payMethod === "online") {
+        await runOnlinePayment(orders, (data && data.keyId) || null);
+        return;
+      }
+      window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false }));
       router.push("/shop/success");
     } catch {
       setSubmitError(t("err_generic"));
@@ -191,6 +307,28 @@ export default function CheckoutPage() {
   if (!me) {
     return (
       <Empty emoji="🔐" title={t("login_to_order")} action={<Btn href="/login">{t("login")}</Btn>} />
+    );
+  }
+
+  if (payProblem) {
+    return (
+      <div>
+        <SectionTitle>🧾 {t("checkout")}</SectionTitle>
+        <Card>
+          <p className="text-sm font-semibold text-[#20291D]">{payProblem}</p>
+          {placedCodes.length > 0 ? (
+            <p className="mt-2 text-sm text-[#66735F]">
+              {t("order_codes")}: <span className="font-semibold text-[#20291D]">{placedCodes.join(", ")}</span>
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Btn href="/shop/orders">{t("my_orders")}</Btn>
+            <Btn href="/shop/category/plants" variant="outline">
+              {t("browse")}
+            </Btn>
+          </div>
+        </Card>
+      </div>
     );
   }
 
@@ -212,7 +350,7 @@ export default function CheckoutPage() {
         <div className="space-y-4">
           <Card>
             <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
-              📍 {t("address")}
+              📚 {t("address")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label={t("full_name")}>
@@ -307,15 +445,25 @@ export default function CheckoutPage() {
             <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
               💵 {t("payment")}
             </h2>
-            <div className="mt-3 flex items-center gap-3 rounded-2xl border-2 border-[#2F6B3F] bg-[#EDF2E6] p-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2F6B3F] text-lg text-white" aria-hidden="true">
-                💵
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#20291D]">{t("trust_cod")}</p>
-                <p className="text-xs text-[#66735F]">{t("cod_note")}</p>
-              </div>
-              <span className="ml-auto h-5 w-5 shrink-0 rounded-full border-[5px] border-[#2F6B3F]" aria-hidden="true" />
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPayMethod("online")}
+                className={payMethod === "online" ? MODE_ON : MODE_OFF}
+              >
+                <span className={payMethod === "online" ? DOT_ON : DOT_OFF} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#20291D]">{t("pay_online")}</span>
+                  <span className="block text-xs text-[#66735F]">{t("pay_online_note")}</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => setPayMethod("cod")} className={payMethod === "cod" ? MODE_ON : MODE_OFF}>
+                <span className={payMethod === "cod" ? DOT_ON : DOT_OFF} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#20291D]">{t("trust_cod")}</span>
+                  <span className="block text-xs text-[#66735F]">{t("cod_note")}</span>
+                </span>
+              </button>
             </div>
           </Card>
         </div>
@@ -354,7 +502,7 @@ export default function CheckoutPage() {
               <SumRow label={t("subtotal")} value={inr(totals.sub)} />
               <SumRow label={t("gst")} value={inr(totals.tax)} />
               <SumRow label={t("delivery")} value={inr(totals.delivery)} />
-              <SumRow label={t("cod_fee")} value={inr(totals.cod)} />
+              {totals.cod > 0 ? <SumRow label={t("cod_fee")} value={inr(totals.cod)} /> : null}
             </div>
             <div className="mt-3 flex justify-between border-t border-dashed border-[#D6D2BC] pt-3 text-lg font-bold text-[#1C3A2A]">
               <span>{t("total")}</span>
