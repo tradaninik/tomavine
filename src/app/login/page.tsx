@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [ownerMode, setOwnerMode] = useState(false);
+  const [pass, setPass] = useState("");
 
   async function sendOtp(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
@@ -92,6 +94,44 @@ export default function LoginPage() {
     }
   }
 
+  async function ownerLogin(ev: FormEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (busy) {
+      return;
+    }
+    setError("");
+    if (!/^\d{10}$/.test(digits)) {
+      setError("Enter your 10-digit mobile number.");
+      return;
+    }
+    if (pass.length < 4) {
+      setError("Enter your password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/owner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: "+91" + digits, password: pass }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error === "not_enabled" ? "Owner sign-in is not configured." : "Wrong phone or password.");
+      }
+      let dest = "/";
+      if (data.role === "ADMIN" || data.role === "SUPER_ADMIN") {
+        dest = "/admin";
+      } else if (data.role === "SELLER") {
+        dest = "/seller";
+      }
+      router.push(dest);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not sign in");
+      setBusy(false);
+    }
+  }
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F7F3E8] px-4">
       <div className="w-full max-w-sm rounded-3xl border border-[#1C3A2A]/10 bg-white p-8 shadow-lg">
@@ -99,7 +139,38 @@ export default function LoginPage() {
         <h1 className="mt-2 text-center text-2xl font-bold text-[#1C3A2A]">Tomavine</h1>
         <p className="text-center text-sm text-[#1C3A2A]/60">Where growers meet gardens</p>
 
-        {step === 1 ? (
+        {ownerMode ? (
+          <form onSubmit={ownerLogin} className="mt-6 space-y-4">
+            <label className="block text-sm font-medium text-[#1C3A2A]">
+              Mobile number
+              <input
+                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 px-3 py-2 text-lg tracking-wide"
+                value={digits}
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="98765 43210"
+                onChange={(e) => setDigits(e.target.value.replace(/\D/g, ""))}
+              />
+            </label>
+            <label className="block text-sm font-medium text-[#1C3A2A]">
+              Password
+              <input
+                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 px-3 py-2 text-lg"
+                type="password"
+                value={pass}
+                autoComplete="current-password"
+                onChange={(e) => setPass(e.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-xl bg-[#2F6B3F] px-4 py-3 font-semibold text-white transition hover:bg-[#255732] disabled:opacity-50"
+            >
+              {busy ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+        ) : step === 1 ? (
           <form onSubmit={sendOtp} className="mt-6 space-y-4">
             <label className="block text-sm font-medium text-[#1C3A2A]">
               Mobile number
@@ -165,6 +236,16 @@ export default function LoginPage() {
           </form>
         )}
 
+        <button
+          type="button"
+          onClick={() => {
+            setOwnerMode((v) => !v);
+            setError("");
+          }}
+          className="mt-4 w-full text-center text-sm text-[#1C3A2A]/60 underline"
+        >
+          {ownerMode ? "Use OTP sign-in instead" : "Owner sign-in"}
+        </button>
         {error ? (
           <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
