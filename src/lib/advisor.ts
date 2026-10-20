@@ -81,7 +81,7 @@ export function classify(c: AdvisorCandidate, input: AdvisorInput) {
   const soil = soilMatches(c.care, input.soil);
 
   const reasons: AdvisorReason = {
-    season: parsed.declared ? (parsed.yearRound ? "all-year" : seasonHit ?? parsed.seasons[0]) : null,
+    season: parsed.declared ? (parsed.yearRound ? "all-year" : hitSeason ?? parsed.seasons[0]) : null,
     soil,
     near,
   };

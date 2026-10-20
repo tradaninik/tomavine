@@ -24,7 +24,7 @@ const SOIL_LABELS: Record<SoilChoice, string> = {
 
 const monthLabel = (m: number) => new Date(2024, m - 1, 1).toLocaleString("en-IN", { month: "long" });
 
-function ResultCard({ it, lang, later }: { it: Item; lang: string; later: boolean }) {
+function ResultCard({ it, lang, later }: { it: Item; lang: Parameters<typeof displayName>[1]; later: boolean }) {
   const dp = displayPriceOf(it, null);
   return (
     <Card>
@@ -38,12 +38,12 @@ function ResultCard({ it, lang, later }: { it: Item; lang: string; later: boolea
             {it.nursery.name} · {it.nursery.city}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {it.reasons.season === "all-year" ? <Pill tone="green">Grows year-round</Pill> : null}
+            {it.reasons.season === "all-year" ? <Pill tone="leaf">Grows year-round</Pill> : null}
             {it.reasons.season && it.reasons.season !== "all-year" ? (
-              <Pill tone="green">{later ? `Best in ${it.reasons.season}` : `Sows in ${it.reasons.season}`}</Pill>
+              <Pill tone="leaf">{later ? `Best in ${it.reasons.season}` : `Sows in ${it.reasons.season}`}</Pill>
             ) : null}
             {it.reasons.soil ? <Pill tone="amber">Suits your soil</Pill> : null}
-            {it.reasons.near ? <Pill tone="blue">Nursery near you</Pill> : null}
+            {it.reasons.near ? <Pill tone="sky">Nursery near you</Pill> : null}
             {it.stock === 0 ? <Pill tone="rose">Out of stock</Pill> : null}
           </div>
         </div>
