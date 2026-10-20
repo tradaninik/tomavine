@@ -530,6 +530,7 @@ const NAV_LINKS = [
   { href: "/shop/category/pots", key: "pots", accent: false },
   { href: "/shop/category/tools", key: "tools", accent: false },
   { href: "/shop/nurseries", key: "nurseries", accent: false },
+  { href: "/shop/advisor", key: "advisor", accent: false },
   { href: "/shop/rescue", key: "rescue", accent: true },
 ];
 
