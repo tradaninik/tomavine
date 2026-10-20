@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
+import { buyerUpdate, notifySellerCancelled } from "@/lib/notify";
 
 // POST /api/customer/orders/[id]/cancel — buyer cancellation.
 // Allowed only while PENDING or CONFIRMED. Transactional: status → CANCELLED,
@@ -47,12 +48,26 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         actorRole: "CUSTOMER",
       },
     });
+        // A cancelled order's payment will never be collected. CREATED -> FAILED;
+    // PAID -> REFUNDED flags refund-owed (Razorpay execution = payments batch).
+    await tx.payment.updateMany({
+      where: { orderId: id, status: "CREATED" },
+      data: { status: "FAILED" },
+    });
+    await tx.payment.updateMany({
+      where: { orderId: id, status: "PAID" },
+      data: { status: "REFUNDED" },
+    });
     return true;
   });
 
   if (!claimed) {
     return NextResponse.json({ error: "not_cancellable" }, { status: 409 });
   }
+  // Best-effort: both helpers self-catch, so a WhatsApp failure can
+  // never fail an already-committed cancellation.
+  await buyerUpdate(id); // buyer confirmation (CANCELLED branch already exists)
+  await notifySellerCancelled(id);
 
   return NextResponse.json({ ok: true });
 }

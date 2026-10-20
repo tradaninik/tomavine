@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { OrderStatus, Role, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
@@ -173,12 +173,16 @@ export async function PATCH(request: Request) {
   }
 
   // Payment bookkeeping for terminal transitions:
-  //  - reject: a CREATED payment will never be collected -> FAILED
+  //  - reject: CREATED -> FAILED, PAID -> REFUNDED (refund owed)
   //  - delivered + COD: cash collected at the door -> PAID
-  // Online payments are settled by the Razorpay webhook only, never here.
+  // Online settlements happen in the Razorpay webhook only, never here.
   if (order.payment) {
-    if (action === "reject" && order.payment.status === "CREATED") {
-      await db.payment.update({ where: { id: order.payment.id }, data: { status: "FAILED" } });
+    if (action === "reject") {
+      if (order.payment.status === "CREATED") {
+        await db.payment.update({ where: { id: order.payment.id }, data: { status: "FAILED" } });
+      } else if (order.payment.status === "PAID") {
+        await db.payment.update({ where: { id: order.payment.id }, data: { status: "REFUNDED" } });
+      }
     } else if (action === "delivered" && order.payment.method === "cod" && order.payment.status === "CREATED") {
       await db.payment.update({ where: { id: order.payment.id }, data: { status: "PAID", capturedAt: new Date() } });
     }

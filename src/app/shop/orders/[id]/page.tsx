@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -73,6 +73,7 @@ type OrderDetail = {
   items: OrderItemRow[];
   events: EventRow[];
   review: ReviewRow;
+  payment: { method: string | null; status: string } | null;
 };
 
 function addressLines(address: unknown): string[] {
@@ -278,6 +279,10 @@ export default function OrderDetailPage() {
   const aCity = addressField(order.address, "city");
   const aPin = addressField(order.address, "pincode");
   const trust = readTrustMeta(order.meta);
+  const codFee =
+    order.payment?.method === "cod"
+      ? Math.max(0, order.total - order.subtotal - order.tax - order.deliveryFee + order.discount)
+      : 0;
   const showPin = order.deliveryOtp !== null && order.deliveryOtp.length > 0 && order.status !== "DELIVERED" && order.status !== "CANCELLED" && order.status !== "REJECTED";
   const reviewChoices = order.items.filter((it, i, arr) => arr.findIndex((x) => x.productId === it.productId) === i);
   const eventsDesc = [...order.events].reverse();
@@ -393,6 +398,12 @@ export default function OrderDetailPage() {
               <span>{t("delivery")}</span>
               <span className="font-semibold text-[#1C3A2A]">{inr(order.deliveryFee)}</span>
             </div>
+            {codFee > 0 ? (
+              <div className="flex justify-between text-[#66735F]">
+                <span>{t("cod_fee")}</span>
+                <span className="font-semibold text-[#1C3A2A]">{inr(codFee)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between border-t border-[#E4E0CE] pt-2 text-base">
               <span className="font-bold text-[#1C3A2A]">{t("total")}</span>
               <span className="font-bold text-[#1C3A2A]">{inr(order.total)}</span>

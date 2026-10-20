@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 
@@ -23,6 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       },
       events: { orderBy: { createdAt: "asc" } },
       review: true,
+      payment: { select: { method: true, status: true } },
     },
   });
 
@@ -72,6 +73,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             createdAt: order.review.createdAt.toISOString(),
           }
         : null,
+      payment: order.payment ? { method: order.payment.method, status: order.payment.status } : null,
     },
   });
 }

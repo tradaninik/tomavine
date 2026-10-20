@@ -104,3 +104,33 @@ export async function buyerUpdate(orderId: string): Promise<void> {
     console.error("[notify:error] buyer update failed:", e);
   }
 }
+export async function notifySellerCancelled(orderId: string): Promise<void> {
+  try {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      include: { nursery: { include: { owner: true } } },
+    });
+
+    if (!order) {
+      return;
+    }
+
+    const seller = order.nursery.owner;
+
+    const binding = await db.whatsappBinding.upsert({
+      where: { userId: seller.id },
+      update: {},
+      create: { userId: seller.id, waId: seller.phone },
+    });
+
+    const msg = [
+      `🚫 Order ${order.code} was cancelled by the buyer.`,
+      ``,
+      `No action needed — stock has been returned automatically.`,
+    ].join("\n");
+
+    await waText(binding.waId, msg);
+  } catch (e) {
+    console.error("[notify:error] seller cancel alert failed:", e);
+  }
+}
