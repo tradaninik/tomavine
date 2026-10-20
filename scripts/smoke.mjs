@@ -85,6 +85,7 @@ await probe("Landing page", "/", 200);
 await probe("Login page", "/login", 200);
 await probe("Rescue page", "/shop/rescue", 200);
 await probe("Nurseries page", "/shop/nurseries", 200);
+await probe("Advisor page", "/shop/advisor", 200);
 await probe("Session probe", "/api/auth/me", 200, (d) => (d && d.user ? "logged in as " + d.user.phone : "not logged in"));
 await probe("Taxonomy", "/api/catalog/taxonomy?kind=saplingVariety", 200, (d) =>
   d ? (d.terms ? d.terms.length : "?") + " terms / " + (d.kinds ? d.kinds.length : "?") + " kinds (expect 60 / 5)" : "no body"
