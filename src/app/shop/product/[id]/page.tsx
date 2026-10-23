@@ -51,6 +51,7 @@ type Product = {
   priceMin: number;
   mrp: number;
   stock: number;
+  image: string | null;
   nursery: Nursery;
   variants: Variant[];
   rescue: { pct: number; expiresAt: string } | null;
@@ -248,10 +249,15 @@ export default function ProductPage() {
     <div className="space-y-8">
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="relative flex aspect-square max-h-[380px] items-center justify-center rounded-3xl bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/40">
-            <span className="text-8xl" aria-hidden="true">
-              {catEmoji(product.category)}
-            </span>
+          <div className="relative flex aspect-square max-h-[380px] items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-[#EDF2E6] via-[#F7F3E8] to-[#A9C3A0]/40">
+            {product.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.image} alt={name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-8xl" aria-hidden="true">
+                {catEmoji(product.category)}
+              </span>
+            )}
             {product.rescue ? (
               <span className="absolute left-4 top-4 rounded-full bg-[#C14E2A] px-3 py-1 text-sm font-bold text-white shadow">
                 🏷️ −{product.rescue.pct}%
