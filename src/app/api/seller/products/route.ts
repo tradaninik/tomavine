@@ -174,11 +174,11 @@ export async function PATCH(request: Request) {
     const days = body.rescue.days;
 
     if (!Number.isInteger(pct) || pct < 5 || pct > 90) {
-      return NextResponse.json({ error: "Rescue discount must be between 5% and 90%" }, { status: 400 });
+      return NextResponse.json({ error: "Discount must be between 5% and 90%" }, { status: 400 });
     }
 
     if (!Number.isInteger(days) || days < 1 || days > 30) {
-      return NextResponse.json({ error: "Rescue days must be between 1 and 30" }, { status: 400 });
+      return NextResponse.json({ error: "Discount days must be between 1 and 30" }, { status: 400 });
     }
 
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);

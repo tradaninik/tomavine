@@ -187,7 +187,7 @@ export function Price({ price, mrp }: { price: number; mrp?: number }) {
 export function RescueBadge({ pct }: { pct: number }) {
   return (
     <Pill tone="amber">
-      <span aria-hidden="true">🏷️</span> Rescue −{pct}%
+      <span aria-hidden="true">🏷️</span> Discount −{pct}%
     </Pill>
   );
 }

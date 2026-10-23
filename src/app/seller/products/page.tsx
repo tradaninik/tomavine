@@ -892,7 +892,7 @@ export default function SellerProductsPage() {
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Pill tone="green">{p.category}</Pill>
                   {p.subCategory ? <Pill tone="blue">{subLabel(p.category, p.subCategory)}</Pill> : null}
-                  {p.rescue ? <Pill tone="amber">Rescue {p.rescue.pct}% off</Pill> : null}
+                  {p.rescue ? <Pill tone="amber">Discount {p.rescue.pct}% off</Pill> : null}
                   {p.hidden ? <Pill tone="gray">Hidden</Pill> : null}
                 </div>
               </div>
@@ -1072,7 +1072,7 @@ export default function SellerProductsPage() {
                     checked={form.rescueOn}
                     onChange={(e) => setForm({ ...form, rescueOn: e.target.checked })}
                   />
-                  Rescue Corner listing (discounted, limited days)
+                  Discount Center listing (discounted, limited days)
                 </label>
 
                 {form.rescueOn ? (

@@ -308,7 +308,7 @@ export default function ProductPage() {
           {product.rescue ? (
             <div className="rounded-2xl border border-[#C14E2A]/30 bg-[#F9E4DB] p-4">
               <p className="text-sm font-bold text-[#8F3517]">
-                🏷️ Rescue −{product.rescue.pct}% · {t("rescue_ends")} {formatDate(product.rescue.expiresAt)}
+                🏷️ Discount −{product.rescue.pct}% · {t("rescue_ends")} {formatDate(product.rescue.expiresAt)}
               </p>
             </div>
           ) : null}
