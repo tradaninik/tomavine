@@ -37,7 +37,7 @@ const PRODUCT_PHOTOS = {
   "Vermicompost — 10 kg": "/photos/vermicompost.jpg",
   "Jeevamrutam — 5 Litre": "/photos/jeevamrutam.jpg",
   "Terracotta Grow Pot — 10 inch": "/photos/terracotta-pot.jpg",
-  "Garden Hand Tool Set — 5 pieces": "/photos/tool-set.jpg",
+  "Garden Hand Tool Set - 5 piece": "/photos/tool-set.jpg",
 };
 
 // nursery slug -> photo
