@@ -57,6 +57,7 @@ export async function GET(req: Request) {
     scope: n.scope,
     scopeKm: n.scopeKm,
     ratingAvg: n.ratingAvg,
+    image: n.image,
     retailOk: n.retailOk,
     bulkOk: n.bulkOk,
     physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
