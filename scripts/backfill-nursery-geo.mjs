@@ -30,6 +30,8 @@ if (!process.env.DATABASE_URL && existsSync(".env")) {
   }
 }
 
+const prisma = new PrismaClient();
+
 // The geo table is a TypeScript module; for this .mjs script we
 // re-derive what we need from a small embedded snapshot that mirrors
 // src/lib/geo.ts (codes + centroids + aliases). If you add districts
