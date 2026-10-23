@@ -262,7 +262,7 @@ function normalize(s) {
 async function main() {
   const nurseries = await prisma.nursery.findMany({
     select: { id: true, name: true, slug: true, city: true, districtCode: true },
-    orderBy: { createdAt: "asc" },
+    orderBy: { name: "asc" },
   });
 
   let matched = 0;
