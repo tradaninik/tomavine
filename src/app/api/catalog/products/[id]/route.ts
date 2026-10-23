@@ -23,6 +23,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
           bulkOk: true,
           retailOk: true,
           physVerifiedAt: true,
+          districtCode: true,
+          lat: true,
+          lng: true,
         },
       },
       reviews: {

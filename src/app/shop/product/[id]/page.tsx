@@ -6,6 +6,8 @@ import { useParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Field, Loading, Pill, StarRow, catEmoji, formatDate, inr, inputCls, toast } from "../../ui";
 import { displayName, useLang } from "@/lib/i18n";
+import { deliveryEta, districtName } from "@/lib/geo";
+import { useGeo } from "../../location";
 import { addToCart, displayPriceOf } from "@/lib/cart";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -36,6 +38,9 @@ type Nursery = {
   bulkOk: boolean;
   retailOk: boolean;
   physVerifiedAt: string | null;
+  districtCode: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 type Product = {
@@ -101,6 +106,7 @@ export default function ProductPage() {
   const [sending, setSending] = useState(false);
   const [leadSent, setLeadSent] = useState(false);
   const [leadError, setLeadError] = useState("");
+  const { geo } = useGeo();
 
   useEffect(() => {
     let active = true;
@@ -195,6 +201,26 @@ export default function ProductPage() {
   const oos = product.stock <= 0;
   const isSapling = product.category === "saplings";
   const badgeList = Array.isArray(product.badges) ? product.badges.map((b) => String(b)) : [];
+  // Delivery ETA (Location Backbone v1): same-district = 1–2 days,
+  // ≤150 km = 2–4, same state = 4–6, farther = 5–8. Without a
+  // customer district we show the generic 3–5 band + a nudge to set
+  // one from the header chip.
+  const eta = deliveryEta({
+    userCode: geo ? geo.code : null,
+    userLatLng: null,
+    nurseryCode: product.nursery.districtCode,
+    nurseryLatLng:
+      product.nursery.lat !== null && product.nursery.lng !== null
+        ? { lat: product.nursery.lat, lng: product.nursery.lng }
+        : null,
+  });
+  const etaText =
+    geo && eta.band === "same"
+      ? t("eta_same", { d: districtName(geo.code, lang) })
+      : geo && eta.km !== null
+        ? t(eta.band === "far" ? "eta_far" : eta.band === "state" ? "eta_state" : "eta_nearby", { km: eta.km })
+        : t("eta_unknown");
+  const etaKnown = geo !== null && eta.band !== "unknown" && (eta.band === "same" || eta.km !== null);
   const leadQtyNum = Number(leadQty);
   const leadValid =
     leadQty.trim() !== "" &&
@@ -318,6 +344,15 @@ export default function ProductPage() {
               </p>
             </div>
           ) : null}
+
+          <div className={etaKnown ? "rounded-2xl border border-[#2F6B3F]/30 bg-[#EDF2E6]/60 p-4" : "rounded-2xl border border-dashed border-[#D6D2BC] p-4"}>
+            <p className="text-sm font-bold text-[#1C3A2A]">🚚 {etaText}</p>
+            {!etaKnown ? <p className="mt-0.5 text-xs text-[#66735F]">{t("eta_hint")}</p> : null}
+            <p className="mt-1 text-xs text-[#66735F]">
+              🏡 {product.nursery.name} · {product.nursery.city}
+              {product.nursery.scope === "INDIA" ? " · ships across India" : ""}
+            </p>
+          </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-3xl font-bold text-[#1C3A2A]">{inr(price.now)}</span>

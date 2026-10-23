@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { CART_EVENT, MAX_QTY, addToCart, cartCount, displayPriceOf, loadCart, setQty } from "@/lib/cart";
 import { LangPill, displayName, useLang } from "@/lib/i18n";
+import { LocationChip } from "./location";
 import { careChips } from "@/lib/care";
 import type { ProductCard } from "@/lib/catalog";
 
@@ -615,6 +616,7 @@ export function Nav() {
           />
         </form>
         <div className="ml-auto flex items-center gap-2">
+          <LocationChip />
           <LangPill />
           {user ? (
             <>

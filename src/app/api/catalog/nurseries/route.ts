@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { districtByCode, deliveryEta, haversineKm } from "@/lib/geo";
 
-// Pincode-prefix delivery verdicts (no lat/lng in the schema, so this is
-// deterministic postal-circle logic):
-//   INDIA        -> always delivers ("Ships across India")
-//   STATE        -> first 2 digits match (56xxxx vs 56xxxx)
-//   CITY/RADIUS  -> first 3 digits match (560103 vs 560088 = same sorting area)
-// No match -> nursery stays listed with a pickup-only verdict.
-// NOTE: helpers in route files must NOT be exported — Next.js only allows
-// HTTP handlers and route config as exports here.
+// Delivery verdicts + proximity sorting (Location Backbone v1).
+//
+// Two independent inputs:
+//   ?pincode=XXXXXX  -> postal-circle verdict logic (unchanged from
+//                       the original implementation)
+//   ?district=CODE   -> proximity: distance from the district
+//                       centroid to each nursery's geo binding
+//                       (Nursery.districtCode/lat/lng, backfilled by
+//                       scripts/backfill-nursery-geo.mjs), nearest
+//                       first with rating as tiebreaker. Both params
+//                       can be combined.
+//
+// NOTE: helpers in route files must NOT be exported — Next.js only
+// allows HTTP handlers and route config as exports here.
 
 const PIN_RE = /^[1-9]\d{5}$/;
 
@@ -41,31 +48,62 @@ export async function GET(req: Request) {
   const pincodeParam = url.searchParams.get("pincode") ?? "";
   const pincode = PIN_RE.test(pincodeParam) ? pincodeParam : null;
 
+  const districtParam = url.searchParams.get("district") ?? "";
+  const district = districtByCode(districtParam);
+
   const rows = await db.nursery.findMany({
     where: { status: "VERIFIED" },
     include: { _count: { select: { products: { where: { hidden: false } } } } },
     orderBy: { ratingAvg: "desc" },
   });
 
-  let nurseries = rows.map((n) => ({
-    id: n.id,
-    name: n.name,
-    slug: n.slug,
-    city: n.city,
-    area: n.area,
-    pincode: n.pincode,
-    scope: n.scope,
-    scopeKm: n.scopeKm,
-    ratingAvg: n.ratingAvg,
-    image: n.image,
-    retailOk: n.retailOk,
-    bulkOk: n.bulkOk,
-    physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
-    productCount: n._count.products,
-    verdict: pincode ? deliveryVerdict(n, pincode) : null,
-  }));
+  const userPoint = district ? { lat: district.lat, lng: district.lng } : null;
 
-  if (pincode) {
+  let nurseries = rows.map((n) => {
+    const nurseryPoint = n.lat !== null && n.lng !== null ? { lat: n.lat, lng: n.lng } : null;
+    const distanceKm = userPoint && nurseryPoint ? haversineKm(userPoint, nurseryPoint) : null;
+    const eta = district
+      ? deliveryEta({
+          userCode: district.code,
+          userLatLng: null,
+          nurseryCode: n.districtCode,
+          nurseryLatLng: nurseryPoint,
+        })
+      : null;
+    return {
+      id: n.id,
+      name: n.name,
+      slug: n.slug,
+      city: n.city,
+      area: n.area,
+      pincode: n.pincode,
+      scope: n.scope,
+      scopeKm: n.scopeKm,
+      ratingAvg: n.ratingAvg,
+      image: n.image,
+      retailOk: n.retailOk,
+      bulkOk: n.bulkOk,
+      physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
+      districtCode: n.districtCode,
+      productCount: n._count.products,
+      distanceKm: distanceKm,
+      eta: eta ? { band: eta.band, minDays: eta.minDays, maxDays: eta.maxDays } : null,
+      verdict: pincode ? deliveryVerdict(n, pincode) : null,
+    };
+  });
+
+  if (district) {
+    // Nearest first; nurseries without a geo binding keep their spot
+    // at the end (rating-ordered) instead of disappearing.
+    nurseries = nurseries.sort((a, b) => {
+      const aKm = a.distanceKm;
+      const bKm = b.distanceKm;
+      if (aKm === null && bKm !== null) return 1;
+      if (bKm === null && aKm !== null) return -1;
+      if (aKm !== null && bKm !== null && aKm !== bKm) return aKm - bKm;
+      return b.ratingAvg - a.ratingAvg;
+    });
+  } else if (pincode) {
     nurseries = nurseries.sort((a, b) => {
       const aDelivers = a.verdict ? a.verdict.delivers : false;
       const bDelivers = b.verdict ? b.verdict.delivers : false;
@@ -76,5 +114,9 @@ export async function GET(req: Request) {
     });
   }
 
-  return NextResponse.json({ nurseries: nurseries, pincode: pincode });
+  return NextResponse.json({
+    nurseries: nurseries,
+    pincode: pincode,
+    district: district ? district.code : null,
+  });
 }

@@ -89,6 +89,9 @@ model Nursery {
   physVerifiedAt DateTime?
   growArea       String?
   image          String?
+  districtCode   String?
+  lat            Float?
+  lng            Float?
   categories     Json?
   ratingAvg      Float    @default(0)
   products       Product[]
@@ -98,6 +101,7 @@ model Nursery {
 
   @@index([city])
   @@index([status])
+  @@index([districtCode])
 }
 
 model Product {

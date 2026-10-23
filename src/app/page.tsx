@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { LangPill, LangProvider, useLang } from "@/lib/i18n";
-import { Btn, ProductTile, StarRow } from "@/app/shop/ui";
+import { Btn, ProductTile, StarRow, ToastHost } from "@/app/shop/ui";
+import { LocationChip } from "@/app/shop/location";
 import { CART_EVENT, cartCount, loadCart } from "@/lib/cart";
 import type { ProductCard } from "@/lib/catalog";
 
@@ -148,6 +149,7 @@ function Landing() {
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            <LocationChip />
             <LangPill />
             {user ? (
               <>
@@ -388,6 +390,7 @@ function Landing() {
         <p className="mt-1">Where growers meet gardens</p>
         <p className="mt-1 text-xs">Cash on delivery · From physically verified nurseries</p>
       </footer>
+      <ToastHost />
     </div>
   );
 }
