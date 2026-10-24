@@ -111,6 +111,7 @@ export default function NurseriesPage() {
     <div>
       <SectionTitle>🏡 {t("nurseries")}</SectionTitle>
       <p className="mb-4 max-w-2xl text-sm text-[#66735F]">{t("pin_search")}</p>
+      <p className="mb-4 text-xs text-[#66735F]">{t("legal_eta_note")}</p>
 
       {geo ? (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#2F6B3F]/30 bg-[#EDF2E6]/70 px-4 py-3 text-sm">

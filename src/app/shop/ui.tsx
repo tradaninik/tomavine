@@ -744,6 +744,7 @@ export function Nav() {
 }
 
 export function Footer() {
+  const { t } = useLang();
   return (
     <footer
       className="mt-16 bg-[#1C3A2A] px-4 pt-8 text-center text-sm text-[#F7F3E8]/60"
@@ -754,6 +755,24 @@ export function Footer() {
       </p>
       <p className="mt-1">Where growers meet gardens</p>
       <p className="mt-1 text-xs">Cash on delivery · From physically verified nurseries</p>
+      <p className="mt-3 text-xs">{t("legal_footer_note")}</p>
+      <nav className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
+        <Link href="/legal/terms" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          Terms of Use
+        </Link>
+        <Link href="/legal/privacy" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          Privacy
+        </Link>
+        <Link href="/legal/refund" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          Refunds &amp; Replacements
+        </Link>
+        <Link href="/legal/shipping" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          Shipping
+        </Link>
+        <Link href="/legal/grievance" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          Grievance
+        </Link>
+      </nav>
     </footer>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -249,6 +250,17 @@ export default function LoginPage() {
         {error ? (
           <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
+        <p className="mt-5 text-center text-xs leading-relaxed text-[#1C3A2A]/50">
+          By continuing you agree to our{" "}
+          <Link href="/legal/terms" className="text-[#2F6B3F] underline underline-offset-2">
+            Terms of Use
+          </Link>{" "}
+          and{" "}
+          <Link href="/legal/privacy" className="text-[#2F6B3F] underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          , and to receive service messages (OTP, order updates) on WhatsApp or SMS.
+        </p>
       </div>
     </div>
   );

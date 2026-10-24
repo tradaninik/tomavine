@@ -75,6 +75,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [payProblem, setPayProblem] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [placedCodes, setPlacedCodes] = useState<string[]>([]);
   const [idemKey] = useState<string>(newIdemKey);
 
@@ -239,7 +240,7 @@ export default function CheckoutPage() {
     if (submitting) {
       return;
     }
-    if (!formValid || missing.length > 0 || lines.length === 0) {
+    if (!formValid || !accepted || missing.length > 0 || lines.length === 0) {
       setSubmitError(t("err_generic"));
       return;
     }
@@ -508,12 +509,28 @@ export default function CheckoutPage() {
               <span>{t("total")}</span>
               <span>{inr(totals.total)}</span>
             </div>
+            <p className="mt-2 text-xs text-[#66735F]">{t("legal_checkout_note")}</p>
             {submitError ? (
               <div className="mt-3">
                 <ErrBox>{submitError}</ErrBox>
               </div>
             ) : null}
-            <Btn type="submit" disabled={submitting || !formValid || missing.length > 0} size="lg" className="mt-4 w-full">
+            <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-2xl border border-[#1C3A2A]/10 bg-[#F7F3E8]/60 p-3 text-left">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(e) => setAccepted(e.target.checked)}
+                className="mt-0.5 shrink-0 accent-[#2F6B3F]"
+                aria-required="true"
+              />
+              <span className="text-xs text-[#66735F]">
+                {t("legal_accept_label")}{" "}
+                <Link href="/legal/refund" className="font-semibold text-[#2F6B3F] underline underline-offset-2">
+                  {t("legal_accept_link")}
+                </Link>
+              </span>
+            </label>
+            <Btn type="submit" disabled={submitting || !formValid || missing.length > 0 || !accepted} size="lg" className="mt-4 w-full">
               {submitting ? t("placing") : t("place_order")}
             </Btn>
             <Btn href="/shop/cart" variant="ghost" size="sm" className="mt-2 w-full">

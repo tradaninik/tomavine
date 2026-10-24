@@ -37,7 +37,8 @@ export default function RescuePage() {
   return (
     <div>
       <SectionTitle>🏷️ {t("rescue")}</SectionTitle>
-      <p className="mb-6 max-w-2xl text-sm text-[#66735F]">{t("rescue_s")}</p>
+      <p className="mb-2 max-w-2xl text-sm text-[#66735F]">{t("rescue_s")}</p>
+      <p className="mb-6 max-w-2xl text-xs text-[#66735F]">{t("legal_rescue_note")}</p>
 
       {error ? (
         <div className="mb-4">

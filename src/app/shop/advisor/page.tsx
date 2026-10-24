@@ -57,7 +57,7 @@ function ResultCard({ it, lang, later }: { it: Item; lang: Parameters<typeof dis
 }
 
 export default function AdvisorPage() {
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [soil, setSoil] = useState<SoilChoice>("unsure");
   const [city, setCity] = useState("");
@@ -94,6 +94,7 @@ export default function AdvisorPage() {
       <p className="mt-1 text-sm text-[#66735F]">
         What can you plant this month, in your soil, from nurseries near you?
       </p>
+      <p className="mt-1 text-xs text-[#66735F]">{t("legal_advisor_note")}</p>
 
       <Card className="mt-4">
         <div className="grid gap-3 sm:grid-cols-3">

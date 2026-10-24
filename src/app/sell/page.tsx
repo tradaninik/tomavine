@@ -555,6 +555,7 @@ function SellInner() {
                 {t("sell_page_title")}
               </h1>
               <p className="mt-4 max-w-2xl text-base text-[#66735F] sm:text-lg">{t("sell_page_s")}</p>
+              <p className="mt-2 text-xs text-[#66735F]">{t("legal_marketplace_note")}</p>
             </section>
             <section className="mx-auto max-w-sm px-4 pb-16">
               <Card>

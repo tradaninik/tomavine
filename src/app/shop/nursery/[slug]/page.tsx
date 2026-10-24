@@ -125,6 +125,7 @@ export default function NurseryPage() {
             ← {t("nurseries")}
           </Btn>
         </div>
+        <p className="mt-3 border-t border-[#E4E0CE] pt-3 text-xs text-[#66735F]">{t("legal_marketplace_note")}</p>
       </Card>
 
       {products.length === 0 ? (

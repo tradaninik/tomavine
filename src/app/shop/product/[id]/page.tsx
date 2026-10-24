@@ -362,6 +362,7 @@ export default function ProductPage() {
               🏡 {product.nursery.name} · {product.nursery.city}
               {product.nursery.scope === "INDIA" ? " · ships across India" : ""}
             </p>
+            <p className="mt-1 text-xs text-[#8E9A84]">{t("legal_eta_note")}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -379,6 +380,7 @@ export default function ProductPage() {
               <Pill tone="leaf">{t("in_stock")}</Pill>
             )}
           </div>
+          <p className="text-xs text-[#66735F]">{t("legal_product_note")}</p>
 
           {product.variants.length > 0 ? (
             <div className="space-y-2">
