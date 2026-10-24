@@ -4,6 +4,16 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
 import { isValidSub } from "@/lib/subcategories";
+import { nurseryFeatureOn } from "@/lib/nursery-features";
+
+// Franchise gates (mission F): the products/rescue switches the super
+// admin sets on the nursery. products=false → the whole catalog is
+// platform-managed (read-only here); rescue=false → only the rescue
+// deal editor is blocked. Both default ON.
+const PRODUCTS_OFF_MSG =
+  "Your product catalog is managed by Tomavine — contact support to add or change plants.";
+const RESCUE_OFF_MSG =
+  "Rescue deals are not enabled for your nursery — contact Tomavine support.";
 
 export async function GET() {
   const auth = await requireNursery();
@@ -30,7 +40,14 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ products: products, allowedCategories: allowedCategories });
+  return NextResponse.json({
+    products: products,
+    allowedCategories: allowedCategories,
+    canManage: {
+      products: nurseryFeatureOn(nursery.features, "products"),
+      rescue: nurseryFeatureOn(nursery.features, "rescue"),
+    },
+  });
 }
 
 export async function PATCH(request: Request) {
@@ -41,6 +58,10 @@ export async function PATCH(request: Request) {
   }
 
   const { nursery } = auth;
+
+  if (!nurseryFeatureOn(nursery.features, "products")) {
+    return NextResponse.json({ error: PRODUCTS_OFF_MSG }, { status: 403 });
+  }
 
   let body: {
     id?: string;
@@ -164,12 +185,17 @@ export async function PATCH(request: Request) {
   }
 
   if (body.rescue === null) {
+    // Removal stays allowed even when the rescue module is off —
+    // letting a seller retire an existing deal is always safe.
     if (product.rescue) {
       await db.rescueListing.delete({
         where: { productId: product.id },
       });
     }
   } else if (typeof body.rescue === "object") {
+    if (!nurseryFeatureOn(nursery.features, "rescue")) {
+      return NextResponse.json({ error: RESCUE_OFF_MSG }, { status: 403 });
+    }
     const pct = body.rescue.pct;
     const days = body.rescue.days;
 
@@ -245,6 +271,10 @@ export async function POST(request: Request) {
   }
 
   const { nursery } = auth;
+
+  if (!nurseryFeatureOn(nursery.features, "products")) {
+    return NextResponse.json({ error: PRODUCTS_OFF_MSG }, { status: 403 });
+  }
 
   let body: {
     category?: string;

@@ -13,6 +13,7 @@ export async function GET(req: Request) {
     where: status === "PENDING" || status === "VERIFIED" || status === "REJECTED" ? { status: status } : {},
     include: {
       owner: { select: { name: true, phone: true } },
+      serviceAreas: { include: { location: true } },
       _count: { select: { products: true } },
     },
     orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -35,6 +36,16 @@ export async function GET(req: Request) {
       physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
       growArea: n.growArea,
       categories: n.categories,
+      features: n.features,
+      serviceAreas: n.serviceAreas
+        .slice()
+        .sort((a, b) => a.location.pincode.localeCompare(b.location.pincode))
+        .map((sa) => ({
+          locationId: sa.locationId,
+          pincode: sa.location.pincode,
+          city: sa.location.city,
+          state: sa.location.state,
+        })),
       ratingAvg: n.ratingAvg,
       productCount: n._count.products,
       ownerName: n.owner.name,
@@ -57,6 +68,10 @@ const CreateBody = z.object({
   bulkOk: z.boolean(),
   retailOk: z.boolean(),
   growArea: z.string().trim().max(200).nullable(),
+  // Mission F: service areas the super admin picks while creating the
+  // nursery. Optional — a brand-new nursery can start empty and the
+  // nursery admin adds their own pincodes from the seller console.
+  locationIds: z.array(z.string().trim().min(1)).max(200).optional().default([]),
 });
 
 function slugifyName(name: string): string {
@@ -90,6 +105,15 @@ export async function POST(req: Request) {
   const existing = await db.user.findUnique({ where: { phone: body.ownerPhone } });
   if (existing) {
     return NextResponse.json({ error: "duplicate" }, { status: 409 });
+  }
+  // Unknown location ids fail the whole create — the form only offers
+  // real rows, so a bad id means a stale tab, not a typo to forgive.
+  const uniqueLocationIds = Array.from(new Set(body.locationIds));
+  if (uniqueLocationIds.length > 0) {
+    const found = await db.serviceLocation.count({ where: { id: { in: uniqueLocationIds } } });
+    if (found !== uniqueLocationIds.length) {
+      return NextResponse.json({ error: "invalid_locations" }, { status: 400 });
+    }
   }
   const base = slugifyName(body.name);
   let slug = base;
@@ -126,6 +150,13 @@ export async function POST(req: Request) {
           growArea: growArea,
         },
       });
+      await tx.nurseryServiceArea.createMany({
+        data: uniqueLocationIds.map((locationId) => ({
+          nurseryId: nursery.id,
+          locationId: locationId,
+        })),
+        skipDuplicates: true,
+      });
       await tx.auditLog.create({
         data: {
           actorId: adminId,
@@ -138,6 +169,7 @@ export async function POST(req: Request) {
             ownerName: owner.name,
             ownerPhone: owner.phone,
             status: nursery.status,
+            locationCount: uniqueLocationIds.length,
             source: "admin",
           },
         },

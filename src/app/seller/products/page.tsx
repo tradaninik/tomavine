@@ -198,6 +198,9 @@ export default function SellerProductsPage() {
   const [createError, setCreateError] = useState("");
   const [createOk, setCreateOk] = useState("");
   const [allowedCats, setAllowedCats] = useState<string[] | null>(null);
+  // Mission F: franchise switches from the super admin — products off =
+  // read-only catalog, rescue off = no discount-center editor.
+  const [canManage, setCanManage] = useState({ products: true, rescue: true });
   const [photoBusyId, setPhotoBusyId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
 
@@ -212,6 +215,11 @@ export default function SellerProductsPage() {
       const data = await res.json();
       setProducts(data.products);
       setAllowedCats(Array.isArray(data.allowedCategories) ? data.allowedCategories : null);
+      const cm = data.canManage;
+      setCanManage({
+        products: !cm || cm.products !== false,
+        rescue: !cm || cm.rescue !== false,
+      });
       setError("");
     } catch {
       setError("Could not load products.");
@@ -586,8 +594,17 @@ export default function SellerProductsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-[#1C3A2A]">Products</h1>
-        <Btn onClick={openNew}>{newOpen ? "Close form" : "+ New product"}</Btn>
+        {canManage.products ? (
+          <Btn onClick={openNew}>{newOpen ? "Close form" : "+ New product"}</Btn>
+        ) : null}
       </div>
+
+      {!canManage.products ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          🔒 Your product catalog is managed by Tomavine — contact support to add or change plants. Everything below
+          stays visible; you just can&apos;t edit it from here.
+        </div>
+      ) : null}
 
       {error ? <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p> : null}
       {photoError ? <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">📷 {photoError}</p> : null}
@@ -896,9 +913,11 @@ export default function SellerProductsPage() {
                   {p.hidden ? <Pill tone="gray">Hidden</Pill> : null}
                 </div>
               </div>
-              <Btn kind="ghost" onClick={() => (editingId === p.id ? setEditingId(null) : startEdit(p))}>
-                {editingId === p.id ? "Close" : "Edit"}
-              </Btn>
+              {canManage.products ? (
+                <Btn kind="ghost" onClick={() => (editingId === p.id ? setEditingId(null) : startEdit(p))}>
+                  {editingId === p.id ? "Close" : "Edit"}
+                </Btn>
+              ) : null}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -906,19 +925,21 @@ export default function SellerProductsPage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.image} alt={p.nameEn} className="h-14 w-14 rounded-xl border border-[#1C3A2A]/10 object-cover" />
               ) : null}
-              <label
-                className={`cursor-pointer rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#1C3A2A] transition hover:border-[#2F6B3F] ${
-                  photoBusyId === p.id ? "pointer-events-none opacity-50" : ""
-                }`}
-              >
-                📷 {p.image ? "Replace photo" : "Add photo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => onPhotoPick(p, e)}
-                />
-              </label>
+              {canManage.products ? (
+                <label
+                  className={`cursor-pointer rounded-xl border border-[#D6D2BC] bg-white px-3 py-2 text-sm font-semibold text-[#1C3A2A] transition hover:border-[#2F6B3F] ${
+                    photoBusyId === p.id ? "pointer-events-none opacity-50" : ""
+                  }`}
+                >
+                  📷 {p.image ? "Replace photo" : "Add photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => onPhotoPick(p, e)}
+                  />
+                </label>
+              ) : null}
               {photoBusyId === p.id ? <span className="text-xs font-medium text-[#66735F]">Uploading…</span> : null}
             </div>
 
@@ -947,21 +968,25 @@ export default function SellerProductsPage() {
               <span className="text-sm text-[#1C3A2A]/60">
                 Stock: <b className="text-[#1C3A2A]">{p.stock}</b>
               </span>
-              <Btn kind="ghost" onClick={() => quickStock(p, -1)} disabled={busy}>
-                -1
-              </Btn>
-              <Btn kind="ghost" onClick={() => quickStock(p, 1)} disabled={busy}>
-                +1
-              </Btn>
-              <Btn kind="ghost" onClick={() => quickStock(p, -10)} disabled={busy}>
-                -10
-              </Btn>
-              <Btn kind="ghost" onClick={() => quickStock(p, 10)} disabled={busy}>
-                +10
-              </Btn>
-              <Btn kind="ghost" onClick={() => patch(p.id, { hidden: !p.hidden })} disabled={busy}>
-                {p.hidden ? "Unhide" : "Hide"}
-              </Btn>
+              {canManage.products ? (
+                <>
+                  <Btn kind="ghost" onClick={() => quickStock(p, -1)} disabled={busy}>
+                    -1
+                  </Btn>
+                  <Btn kind="ghost" onClick={() => quickStock(p, 1)} disabled={busy}>
+                    +1
+                  </Btn>
+                  <Btn kind="ghost" onClick={() => quickStock(p, -10)} disabled={busy}>
+                    -10
+                  </Btn>
+                  <Btn kind="ghost" onClick={() => quickStock(p, 10)} disabled={busy}>
+                    +10
+                  </Btn>
+                  <Btn kind="ghost" onClick={() => patch(p.id, { hidden: !p.hidden })} disabled={busy}>
+                    {p.hidden ? "Unhide" : "Hide"}
+                  </Btn>
+                </>
+              ) : null}
             </div>
 
             {editingId === p.id ? (
@@ -1066,14 +1091,16 @@ export default function SellerProductsPage() {
                   Hidden from storefront
                 </label>
 
-                <label className="flex items-center gap-2 text-sm font-medium text-[#1C3A2A]">
-                  <input
-                    type="checkbox"
-                    checked={form.rescueOn}
-                    onChange={(e) => setForm({ ...form, rescueOn: e.target.checked })}
-                  />
-                  Discount Center listing (discounted, limited days)
-                </label>
+                {canManage.rescue ? (
+                  <label className="flex items-center gap-2 text-sm font-medium text-[#1C3A2A]">
+                    <input
+                      type="checkbox"
+                      checked={form.rescueOn}
+                      onChange={(e) => setForm({ ...form, rescueOn: e.target.checked })}
+                    />
+                    Discount Center listing (discounted, limited days)
+                  </label>
+                ) : null}
 
                 {form.rescueOn ? (
                   <div className="grid gap-3 sm:grid-cols-2">

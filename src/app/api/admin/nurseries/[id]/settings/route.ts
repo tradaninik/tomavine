@@ -3,6 +3,11 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/permissions";
+import {
+  NURSERY_FEATURE_KEYS,
+  readNurseryFeatures,
+  type NurseryFeatureKey,
+} from "@/lib/nursery-features";
 
 const CATEGORY_VALUES = ["plants", "saplings", "inputs", "pots", "tools"] as const;
 
@@ -19,6 +24,12 @@ const SettingsBody = z.object({
   bulkOk: z.boolean(),
   growArea: z.string().trim().max(200).nullable(),
   categories: z.array(z.enum(CATEGORY_VALUES)).nullable(),
+  // Mission F — the Quiclo-style control panel. Both fields optional so
+  // older callers keep working; the admin form always sends both.
+  // features: map of feature key → on/off. locationIds: the exact set of
+  // service areas the nursery should serve (synced wholesale).
+  features: z.record(z.string(), z.boolean()).nullable().optional(),
+  locationIds: z.array(z.string().trim().min(1)).max(200).optional(),
 });
 
 // PATCH /api/admin/nurseries/[id]/settings — SUPER_ADMIN edits a nursery's
@@ -48,9 +59,50 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (body.categories !== null && body.categories.length === 0) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  const nursery = await db.nursery.findUnique({ where: { id: id } });
+  const nursery = await db.nursery.findUnique({
+    where: { id: id },
+    include: { serviceAreas: { select: { locationId: true } } },
+  });
   if (!nursery) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // ── Mission F: features + service areas ──────────────────────
+  // features → stored SPARSE (only the false keys). All-on collapses
+  // to null, exactly like a never-managed nursery.
+  let featuresData: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+  let featuresChanged = false;
+  if (body.features) {
+    const next: Record<NurseryFeatureKey, boolean> = {
+      products: body.features.products !== false,
+      rescue: body.features.rescue !== false,
+      subscriptions: body.features.subscriptions !== false,
+      cod: body.features.cod !== false,
+      online: body.features.online !== false,
+      locations: body.features.locations !== false,
+    };
+    const offKeys = NURSERY_FEATURE_KEYS.filter((k) => !next[k]);
+    featuresData =
+      offKeys.length > 0 ? (Object.fromEntries(offKeys.map((k) => [k, false])) as Prisma.InputJsonValue) : Prisma.DbNull;
+    const before = readNurseryFeatures(nursery.features);
+    featuresChanged = NURSERY_FEATURE_KEYS.some((k) => before[k] !== next[k]);
+  }
+
+  // locationIds → wholesale sync when present. Unknown ids reject the
+  // save (stale-tab guard, same rule as the create route).
+  let syncLocations = false;
+  let nextLocationIds: string[] = [];
+  if (body.locationIds !== undefined) {
+    nextLocationIds = Array.from(new Set(body.locationIds));
+    if (nextLocationIds.length > 0) {
+      const found = await db.serviceLocation.count({ where: { id: { in: nextLocationIds } } });
+      if (found !== nextLocationIds.length) {
+        return NextResponse.json({ error: "invalid_locations" }, { status: 400 });
+      }
+    }
+    const beforeIds = nursery.serviceAreas.map((sa) => sa.locationId).sort();
+    const afterIds = nextLocationIds.slice().sort();
+    syncLocations = JSON.stringify(beforeIds) !== JSON.stringify(afterIds);
   }
 
   const gstin = body.gstin.toUpperCase();
@@ -76,6 +128,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (nursery.bulkOk !== body.bulkOk) changed.push("bulkOk");
   if (nursery.growArea !== growArea) changed.push("growArea");
   if (beforeCats !== afterCats) changed.push("categories");
+  if (featuresChanged) changed.push("features");
+  if (syncLocations) changed.push("locations");
 
   if (changed.length === 0) {
     return NextResponse.json({ ok: true, changed: [] });
@@ -97,8 +151,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         bulkOk: body.bulkOk,
         growArea: growArea,
         categories: categories !== null ? (categories as Prisma.InputJsonValue) : Prisma.DbNull,
+        ...(body.features ? { features: featuresData } : {}),
       },
     });
+    if (syncLocations) {
+      await tx.nurseryServiceArea.deleteMany({ where: { nurseryId: id } });
+      if (nextLocationIds.length > 0) {
+        await tx.nurseryServiceArea.createMany({
+          data: nextLocationIds.map((locationId) => ({ nurseryId: id, locationId: locationId })),
+          skipDuplicates: true,
+        });
+      }
+    }
     await tx.auditLog.create({
       data: {
         actorId: adminId,
@@ -110,6 +174,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           city: body.city,
           changed: changed.join(", "),
           categories: categories === null ? "all" : categories.join(", "),
+          features: featuresChanged ? JSON.stringify(featuresData) : undefined,
+          locationCount: body.locationIds !== undefined ? nextLocationIds.length : undefined,
           source: "admin",
         },
       },

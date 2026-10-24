@@ -38,7 +38,7 @@ const BulkBody = z.object({
   lines: z.string().trim().min(3).max(20000),
 });
 
-// "500001, Hyderabad, Telangana" / "500001	Hyderabad" — commas or
+// "500001, Hyderabad, Telangana" / "500001     Hyderabad" — commas or
 // tabs both accepted; the state segment is optional.
 function parseBulk(raw: string): { rows: { pincode: string; city: string; state: string }[]; skipped: string[] } {
   const rows: { pincode: string; city: string; state: string }[] = [];
@@ -68,8 +68,21 @@ export async function GET() {
   }
   const locations = await db.serviceLocation.findMany({
     orderBy: [{ state: "asc" }, { city: "asc" }, { pincode: "asc" }],
+    include: { _count: { select: { nurseryAreas: true } } },
   });
-  return NextResponse.json({ locations });
+  // Mission F: each row now carries how many nurseries serve it, so the
+  // console reads as the shared master list behind the nursery forms.
+  return NextResponse.json({
+    locations: locations.map((l) => ({
+      id: l.id,
+      pincode: l.pincode,
+      city: l.city,
+      state: l.state,
+      active: l.active,
+      createdAt: l.createdAt.toISOString(),
+      servingCount: l._count.nurseryAreas,
+    })),
+  });
 }
 
 export async function POST(req: Request) {

@@ -4,10 +4,24 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 import { notifySellerNewOrder } from "@/lib/notify";
+import { nurseryFeatureOn } from "@/lib/nursery-features";
 
 // Supply goods attract 18% GST; everything else (plants, saplings,
 // inputs) is 5%. Saplings are live plants, HSN 0601 -> 5%.
 const SUPPLY = ["pots", "soil", "seeds", "tools"];
+
+// Mission F: tree-mapped products carry their GST on the category
+// node (sub inherits from its top when null). Unmapped products keep
+// the legacy string heuristic. Rates are whole percents.
+function gstPercent(prod: {
+  category: string;
+  categoryNode: { gstRate: number | null; parent: { gstRate: number | null } | null } | null;
+}): number {
+  if (prod.categoryNode) {
+    return prod.categoryNode.gstRate ?? prod.categoryNode.parent?.gstRate ?? 5;
+  }
+  return SUPPLY.includes(prod.category) ? 18 : 5;
+}
 const Addr = z.object({ name: z.string().min(2), phone: z.string().regex(/^\+91[6-9]\d{9}$/),
   house: z.string().min(1), street: z.string().optional(), city: z.string().min(2),
   pincode: z.string().regex(/^[1-9]\d{5}$/) });
@@ -29,7 +43,10 @@ export async function POST(req: Request) {
   const { items, mode, address, paymentMethod } = p.data;
 
   const ids = [...new Set(items.map(i => i.productId))];
-  const products = await db.product.findMany({ where: { id: { in: ids }, hidden: false }, include: { variants: true, rescue: true, nursery: true } });
+  const products = await db.product.findMany({
+    where: { id: { in: ids }, hidden: false },
+    include: { variants: true, rescue: true, nursery: true, categoryNode: { include: { parent: true } } },
+  });
   if (products.length !== ids.length) return NextResponse.json({ error: "unavailable" }, { status: 400 });
 
   const groups = new Map<string, any>();
@@ -44,8 +61,20 @@ export async function POST(req: Request) {
     g.items.push({ productId: prod.id, variantId: v?.id ?? null, qty: it.qty, unitPrice: unit,
       nameSnap: (prod.names as any)?.en ?? prod.nameEn, vlabel: v?.label ?? null });
     g.sub += unit * it.qty;
-    g.tax += Math.round(unit * it.qty * (SUPPLY.includes(prod.category) ? 0.18 : 0.05));
+    g.tax += Math.round(unit * it.qty * (gstPercent(prod) / 100));
     groups.set(prod.nurseryId, g);
+  }
+
+  // Mission F: franchise payment switches — EVERY nursery in the cart
+  // must accept the chosen method, or the whole cart refuses (one
+  // order per nursery, one payment for all of them).
+  for (const g of groups.values()) {
+    if (paymentMethod === "cod" && !nurseryFeatureOn(g.nursery.features, "cod")) {
+      return NextResponse.json({ error: "cod_unavailable", nursery: g.nursery.name }, { status: 400 });
+    }
+    if (paymentMethod !== "cod" && !nurseryFeatureOn(g.nursery.features, "online")) {
+      return NextResponse.json({ error: "online_unavailable", nursery: g.nursery.name }, { status: 400 });
+    }
   }
 
   // One transaction for EVERY group: either the whole cart becomes

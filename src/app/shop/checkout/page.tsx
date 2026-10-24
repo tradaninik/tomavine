@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Field, Loading, SectionTitle, inr, inputCls } from "../ui";
 import { useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
+import { nurseryFeatureOn } from "@/lib/nursery-features";
 import { clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
 import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
@@ -24,6 +25,24 @@ type PlacedOrder = {
 };
 
 type PopupResult = "paid" | "dismissed" | "verify_failed" | "no_script";
+
+// Mission F: cart-wide payment availability — every distinct nursery
+// in the cart must accept the method (orders split per nursery, but one
+// method pays for all of them). An empty cart allows everything.
+function paymentAllowed(products: ProductCard[], key: "cod" | "online"): boolean {
+  const accepted = new Map<string, boolean>();
+  for (const p of products) {
+    if (!accepted.has(p.nurseryId)) {
+      accepted.set(p.nurseryId, nurseryFeatureOn(p.nurseryFeatures, key));
+    }
+  }
+  for (const ok of accepted.values()) {
+    if (!ok) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function newIdemKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -93,6 +112,19 @@ export default function CheckoutPage() {
       .then((data) => {
         if (data && Array.isArray(data.products)) {
           setProducts(data.products);
+          // Mission F: a nursery in the cart may not accept the default
+          // payment method — slide to whichever one every nursery takes.
+          const codOk = paymentAllowed(data.products as ProductCard[], "cod");
+          const onlineOk = paymentAllowed(data.products as ProductCard[], "online");
+          setPayMethod((prev) => {
+            if (prev === "cod" && !codOk && onlineOk) {
+              return "online";
+            }
+            if (prev === "online" && !onlineOk && codOk) {
+              return "cod";
+            }
+            return prev;
+          });
         }
       })
       .catch(() => undefined)
@@ -145,6 +177,8 @@ export default function CheckoutPage() {
 
   const missing = missingLines(lines, products);
   const totals = computeTotals(lines, products, mode, payMethod);
+  const codAllowed = paymentAllowed(products, "cod");
+  const onlineAllowed = paymentAllowed(products, "online");
   const formValid =
     name.trim().length >= 2 &&
     /^[6-9]\d{9}$/.test(phone.trim()) &&
@@ -245,6 +279,12 @@ export default function CheckoutPage() {
       setSubmitError(t("err_generic"));
       return;
     }
+    // Mission F: payment switches — greyed buttons should have stopped
+    // this, but a stale tab can still try; guard before the network.
+    if ((payMethod === "cod" && !codAllowed) || (payMethod === "online" && !onlineAllowed)) {
+      setSubmitError(t("err_pay_unavailable"));
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -273,6 +313,8 @@ export default function CheckoutPage() {
       if (!res.ok) {
         if (data && data.error === "out_of_stock" && data.item) {
           setSubmitError(t("err_stock", { item: data.item }));
+        } else if (data && (data.error === "cod_unavailable" || data.error === "online_unavailable")) {
+          setSubmitError(t("err_pay_unavailable"));
         } else if (data && (data.error === "unavailable" || data.error === "nursery_unavailable")) {
           setSubmitError(t("err_unavailable"));
         } else {
@@ -453,19 +495,25 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => setPayMethod("online")}
-                className={payMethod === "online" ? MODE_ON : MODE_OFF}
+                disabled={!onlineAllowed}
+                className={`${payMethod === "online" ? MODE_ON : MODE_OFF} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <span className={payMethod === "online" ? DOT_ON : DOT_OFF} aria-hidden="true" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-[#20291D]">{t("pay_online")}</span>
-                  <span className="block text-xs text-[#66735F]">{t("pay_online_note")}</span>
+                  <span className="block text-xs text-[#66735F]">{onlineAllowed ? t("pay_online_note") : t("pay_online_off")}</span>
                 </span>
               </button>
-              <button type="button" onClick={() => setPayMethod("cod")} className={payMethod === "cod" ? MODE_ON : MODE_OFF}>
+              <button
+                type="button"
+                onClick={() => setPayMethod("cod")}
+                disabled={!codAllowed}
+                className={`${payMethod === "cod" ? MODE_ON : MODE_OFF} disabled:cursor-not-allowed disabled:opacity-50`}
+              >
                 <span className={payMethod === "cod" ? DOT_ON : DOT_OFF} aria-hidden="true" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-[#20291D]">{t("trust_cod")}</span>
-                  <span className="block text-xs text-[#66735F]">{t("cod_note")}</span>
+                  <span className="block text-xs text-[#66735F]">{codAllowed ? t("cod_note") : t("pay_cod_off")}</span>
                 </span>
               </button>
             </div>

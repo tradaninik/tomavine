@@ -32,6 +32,11 @@ export type ProductCard = {
   nurseryName: string;
   nurserySlug: string;
   nurseryCity: string;
+  // Mission F: the nursery's franchise switches (raw JSON — read with
+  // readNurseryFeatures). Checkout uses cod/online to grey out payment
+  // options when ANY nursery in the cart disallows one. Not secret
+  // config — it is exactly what the storefront must respect.
+  nurseryFeatures: unknown;
   variants: ProductVariantCard[];
   rescue: { pct: number; expiresAt: string } | null;
   avgStars: number;
@@ -41,7 +46,7 @@ export type ProductCard = {
 export const PUBLIC_PRODUCT_INCLUDE = {
   variants: { select: { id: true, label: true, price: true } },
   rescue: { select: { pct: true, expiresAt: true } },
-  nursery: { select: { id: true, name: true, slug: true, city: true } },
+  nursery: { select: { id: true, name: true, slug: true, city: true, features: true } },
   reviews: { select: { stars: true } },
 } satisfies Prisma.ProductInclude;
 
@@ -82,6 +87,7 @@ export function productCard(p: ProductWithRelations): ProductCard {
     nurseryName: p.nursery.name,
     nurserySlug: p.nursery.slug,
     nurseryCity: p.nursery.city,
+    nurseryFeatures: p.nursery.features,
     variants: p.variants.map((v) => ({ id: v.id, label: v.label, price: v.price })),
     rescue: rescue,
     avgStars: avgStars,

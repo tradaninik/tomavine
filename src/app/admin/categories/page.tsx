@@ -651,13 +651,18 @@ function Header({
           {okMsg ? <Pill tone="leaf">✓ {okMsg}</Pill> : null}
           {inactiveCount > 0 ? <Pill tone="amber">{inactiveCount} inactive</Pill> : null}
           {unmapped > 0 ? <Pill tone="amber">{unmapped} products unmapped</Pill> : null}
+          <Btn variant="outline" href="/admin/plants">
+            🌱 Plants →
+          </Btn>
           <Btn onClick={onAdd}>{formOpen ? "Close form" : "+ Add category"}</Btn>
         </div>
       </div>
       <p className="max-w-3xl text-sm text-[#66735F]">
         The two-level browse tree for the storefront ({total} categories). The insights panel below ties it to the
         attribute types and the product catalog; the shop still runs on the old 5-category layout — this tree takes
-        over in phase 2c, so edit freely.
+        over in phase 2c, so edit freely. Plants themselves are added under{" "}
+        <span className="font-semibold">Catalog → Plants</span> (by you) or by each nursery admin from their seller
+        console — the counts above include both.
       </p>
       <p className="max-w-3xl text-xs text-[#8E9A84]">
         ⚠ Re-running <code>scripts/seed-categories.mjs</code> resets the 56 seeded categories to seed values — make

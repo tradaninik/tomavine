@@ -135,6 +135,50 @@ export default function AdminOverviewPage() {
             </Card>
           ) : null}
 
+          <Card>
+            <h2 className="text-lg font-semibold text-[#20291D]" style={{ fontFamily: "var(--font-display), Georgia, serif" }}>
+              How Tomavine fits together
+            </h2>
+            <p className="mt-1 text-xs text-[#8E9A84]">
+              Three roles, one marketplace — like a franchise network: you run the platform, each nursery admin runs their own
+              nursery, customers shop.
+            </p>
+            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-xl bg-[#F7F3E8] p-3">
+                <p className="font-bold text-[#20291D]">🛡️ You — super admin</p>
+                <p className="mt-1 text-xs text-[#66735F]">
+                  Onboard nurseries + their owner accounts, set what each nursery may do (modules &amp; payments), curate the
+                  category tree and the plant catalog.
+                </p>
+              </div>
+              <div className="rounded-xl bg-[#F7F3E8] p-3">
+                <p className="font-bold text-[#20291D]">🏡 Nursery admins</p>
+                <p className="mt-1 text-xs text-[#66735F]">
+                  Each owner logs into <span className="font-semibold">/seller</span> with their phone: add their plants,
+                  manage the pincodes they serve, handle their orders — only the modules you enabled for them.
+                </p>
+              </div>
+              <div className="rounded-xl bg-[#F7F3E8] p-3">
+                <p className="font-bold text-[#20291D]">🛒 Customers</p>
+                <p className="mt-1 text-xs text-[#66735F]">
+                  Shop the storefront. A nursery&apos;s service areas and payment switches (COD / online) shape what they see
+                  at checkout.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Btn href="/admin/nurseries" size="sm" variant="outline">
+                Onboard a nursery
+              </Btn>
+              <Btn href="/admin/plants" size="sm" variant="outline">
+                Add plants
+              </Btn>
+              <Btn href="/admin/locations" size="sm" variant="outline">
+                Location master
+              </Btn>
+            </div>
+          </Card>
+
           <div className="grid gap-4 lg:grid-cols-2">
             {stats.orders !== null ? (
               <Card>

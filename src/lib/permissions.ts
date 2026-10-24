@@ -37,7 +37,7 @@ export const SCOPE_META: Record<AdminScope, { label: string; hint: string }> = {
   nurseries: { label: "Nurseries", hint: "Verification queue and nursery records" },
   orders: { label: "Orders", hint: "Order oversight" },
   audit: { label: "Audit log", hint: "Audit trail feed" },
-  taxonomy: { label: "Taxonomy", hint: "Catalog terms and the category tree" },
+  taxonomy: { label: "Catalog", hint: "The category tree, taxonomy terms, and the plant catalog (Plants console)" },
   locations: { label: "Locations", hint: "Serviceable-pincode list for the storefront dropdowns" },
   accounting: { label: "Accounting", hint: "Reserved — no surface yet" },
 };

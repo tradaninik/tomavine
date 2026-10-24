@@ -27,8 +27,9 @@ const BASE_GROUPS: NavGroup[] = [
   {
     title: "Catalog",
     items: [
-      { href: "/admin/taxonomy", label: "Taxonomy" },
+      { href: "/admin/plants", label: "Plants" },
       { href: "/admin/categories", label: "Categories" },
+      { href: "/admin/taxonomy", label: "Taxonomy" },
     ],
   },
   { title: "System", items: [{ href: "/admin/audit", label: "Audit log" }] },
@@ -57,6 +58,7 @@ function groupsForRole(role: string, permissions: string[] | null): NavGroup[] {
       if (l.href === "/admin/nurseries") return allowed.has("nurseries");
       if (l.href === "/admin/taxonomy") return allowed.has("taxonomy");
       if (l.href === "/admin/categories") return allowed.has("taxonomy");
+      if (l.href === "/admin/plants") return allowed.has("taxonomy");
       if (l.href === "/admin/orders") return allowed.has("orders");
       if (l.href === "/admin/locations") return allowed.has("locations");
       if (l.href === "/admin/audit") return allowed.has("audit");

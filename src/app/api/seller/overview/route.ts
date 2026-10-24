@@ -33,7 +33,7 @@ export async function GET() {
     OrderStatus.DELIVERED,
   ];
 
-  const [todayAgg, monthAgg, pendingCount, subscriptionsCount, lowStock, recentOrders] = await Promise.all([
+  const [todayAgg, monthAgg, pendingCount, subscriptionsCount, lowStock, recentOrders, locationsCount] = await Promise.all([
     db.order.aggregate({
       _sum: { total: true },
       where: {
@@ -75,13 +75,21 @@ export async function GET() {
         user: { select: { name: true, phone: true } },
       },
     }),
+    db.nurseryServiceArea.count({ where: { nurseryId: nursery.id } }),
   ]);
 
+  // Mission F: the overview also carries the franchise switchboard
+  // state (raw features JSON — readNurseryFeatures on the client) and
+  // the service-area count, so the seller console can show the nursery
+  // admin exactly what the super admin has enabled for them.
   return NextResponse.json({
+    nurseryName: nursery.name,
     todayRevenue: todayAgg._sum.total ?? 0,
     monthRevenue: monthAgg._sum.total ?? 0,
     pendingOrders: pendingCount,
     activeSubscriptions: subscriptionsCount,
+    locationsCount: locationsCount,
+    features: nursery.features,
     lowStock: lowStock,
     recentOrders: recentOrders,
   });

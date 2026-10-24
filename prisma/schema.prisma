@@ -93,11 +93,19 @@ model Nursery {
   lat            Float?
   lng            Float?
   categories     Json?
+  // Franchise controls (mission F): per-nursery module/payment switches
+  // the super admin sets, mirroring an opt-in sheet. null = every module
+  // on (the default for pre-existing nurseries); an object disables a
+  // module only where a key is explicitly false. Keys live in
+  // src/lib/nursery-features.ts — unknown keys are ignored, missing keys
+  // read as enabled, so new toggles start ON for everyone.
+  features       Json?
   ratingAvg      Float              @default(0)
   products       Product[]
   services       ServiceListing[]
   orders         Order[]
   quotes         Quote[]
+  serviceAreas   NurseryServiceArea[]
 
   @@index([city])
   @@index([status])
@@ -384,13 +392,32 @@ model TaxonomyTerm {
 // Nothing on the storefront is BLOCKED by absence: an unlisted
 // pincode still works, it just gets no dropdown suggestion.
 model ServiceLocation {
-  id        String   @id @default(cuid())
-  pincode   String   @unique
-  city      String
-  state     String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  pincode      String   @unique
+  city         String
+  state        String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  nurseryAreas NurseryServiceArea[]
 
   @@index([active])
+}
+
+// Which nursery serves which pincode (mission F). Rows are created by
+// the nursery admin from the seller console ("Locations") or by the
+// super admin assigning service areas on the nursery form. The
+// storefront pincode search turns a matching row into a "Delivers to
+// your pincode" verdict for that nursery. Unlinking = deleting the row;
+// the master ServiceLocation row always stays.
+model NurseryServiceArea {
+  id         String          @id @default(cuid())
+  nurseryId  String
+  nursery    Nursery         @relation(fields: [nurseryId], references: [id], onDelete: Cascade)
+  locationId String
+  location   ServiceLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+
+  @@unique([nurseryId, locationId])
+  @@index([locationId])
 }

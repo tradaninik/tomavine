@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Loading, Pill, formatDate, inputCls, statusTone } from "../ui";
+import { NURSERY_FEATURE_KEYS, NURSERY_FEATURE_META, readNurseryFeatures } from "@/lib/nursery-features";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
@@ -23,11 +24,15 @@ type NurseryRow = {
   physVerifiedAt: string | null;
   growArea: string | null;
   categories: string[] | null;
+  features: unknown;
+  serviceAreas: { locationId: string; pincode: string; city: string; state: string }[];
   ratingAvg: number;
   productCount: number;
   ownerName: string | null;
   ownerPhone: string;
 };
+
+type LocationOpt = { id: string; pincode: string; city: string; state: string; active: boolean; servingCount: number };
 
 type MeInfo = { role: string } | null;
 
@@ -45,6 +50,7 @@ type OnboardForm = {
   retailOk: boolean;
   bulkOk: boolean;
   growArea: string;
+  locationIds: string[];
 };
 
 type EditForm = {
@@ -60,6 +66,8 @@ type EditForm = {
   bulkOk: boolean;
   growArea: string;
   categories: string[];
+  locationIds: string[];
+  features: Record<string, boolean>;
 };
 
 const EMPTY_ONBOARD: OnboardForm = {
@@ -76,6 +84,7 @@ const EMPTY_ONBOARD: OnboardForm = {
   retailOk: true,
   bulkOk: true,
   growArea: "",
+  locationIds: [],
 };
 
 const SCOPE_OPTIONS = [
@@ -136,6 +145,7 @@ export default function AdminNurseriesPage() {
   const [actError, setActError] = useState("");
 
   const [me, setMe] = useState<MeInfo>(null);
+  const [locations, setLocations] = useState<LocationOpt[]>([]);
   const [form, setForm] = useState<OnboardForm>(EMPTY_ONBOARD);
   const [nurseryPhoneTouched, setNurseryPhoneTouched] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -185,8 +195,27 @@ export default function AdminNurseriesPage() {
     };
   }, []);
 
+  // Mission F: the master location list powers the "Locations served"
+  // pickers on the onboard + edit forms. A staff admin without the
+  // locations scope gets nothing here — the forms just note it.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/locations")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data && Array.isArray(data.locations)) {
+          setLocations(data.locations);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filtered = tab === "all" ? rows : rows.filter((r) => r.status === tab);
   const pendingCount = rows.filter((r) => r.status === "PENDING").length;
+  const activeLocations = locations.filter((l) => l.active);
 
   async function act(id: string, action: "verify" | "reject", name: string, currentStatus: string) {
     if (action === "reject") {
@@ -223,6 +252,28 @@ export default function AdminNurseriesPage() {
 
   function setField<K extends keyof OnboardForm>(key: K, value: OnboardForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function toggleOnboardLocation(id: string) {
+    setForm((f) => ({
+      ...f,
+      locationIds: f.locationIds.includes(id) ? f.locationIds.filter((x) => x !== id) : [...f.locationIds, id],
+    }));
+  }
+
+  function toggleEditLocation(id: string) {
+    setEdit((f) =>
+      f
+        ? {
+            ...f,
+            locationIds: f.locationIds.includes(id) ? f.locationIds.filter((x) => x !== id) : [...f.locationIds, id],
+          }
+        : f,
+    );
+  }
+
+  function toggleEditFeature(key: string) {
+    setEdit((f) => (f ? { ...f, features: { ...f.features, [key]: !(f.features[key] !== false) } } : f));
   }
 
   function validateOnboard(): string[] {
@@ -274,13 +325,19 @@ export default function AdminNurseriesPage() {
           bulkOk: form.bulkOk,
           retailOk: form.retailOk,
           growArea: form.growArea.trim().length > 0 ? form.growArea.trim() : null,
+          locationIds: form.locationIds,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error ?? "failed");
       }
-      setFormOk(data.nursery.name + " created — it is in the PENDING queue below. The owner can now log in with their phone as a seller.");
+      setFormOk(
+        data.nursery.name +
+          " created — it is in the PENDING queue below. The owner can now log in with their phone as a seller" +
+          (form.locationIds.length > 0 ? `, already serving ${form.locationIds.length} location${form.locationIds.length > 1 ? "s" : ""}` : "") +
+          ".",
+      );
       setForm(EMPTY_ONBOARD);
       setNurseryPhoneTouched(false);
       setTab("PENDING");
@@ -291,6 +348,8 @@ export default function AdminNurseriesPage() {
         setFormError("That owner phone already has an account — existing owners should use the public 'List your nursery' page instead.");
       } else if (code === "forbidden") {
         setFormError("Only the super admin can onboard nurseries.");
+      } else if (code === "invalid_locations") {
+        setFormError("Those locations changed — refresh the page and pick again.");
       } else if (code === "invalid") {
         setFormError("Some fields need attention — please check the form and retry.");
       } else {
@@ -303,6 +362,7 @@ export default function AdminNurseriesPage() {
 
   function startEdit(n: NurseryRow) {
     setEditingId(n.id);
+    const f = readNurseryFeatures(n.features);
     setEdit({
       name: n.name,
       digits: n.phone.startsWith("+91") ? n.phone.slice(3) : n.phone,
@@ -316,6 +376,15 @@ export default function AdminNurseriesPage() {
       bulkOk: n.bulkOk,
       growArea: n.growArea ?? "",
       categories: n.categories === null ? [...ALL_CATEGORY_VALUES] : n.categories.filter((c) => ALL_CATEGORY_VALUES.includes(c)),
+      locationIds: n.serviceAreas.map((sa) => sa.locationId),
+      features: {
+        products: f.products,
+        rescue: f.rescue,
+        subscriptions: f.subscriptions,
+        cod: f.cod,
+        online: f.online,
+        locations: f.locations,
+      },
     });
     setEditError("");
     setEditOk("");
@@ -353,6 +422,9 @@ export default function AdminNurseriesPage() {
     }
     if (!edit.retailOk && !edit.bulkOk) problems.push("Sells — enable retail, bulk, or both.");
     if (edit.categories.length === 0) problems.push("Categories — enable at least one.");
+    if (!edit.features.cod && !edit.features.online) {
+      problems.push("Payments — keep at least one of COD or online enabled; checkout needs a payment method.");
+    }
     return problems;
   }
 
@@ -386,6 +458,8 @@ export default function AdminNurseriesPage() {
           bulkOk: edit.bulkOk,
           growArea: edit.growArea.trim().length > 0 ? edit.growArea.trim() : null,
           categories: edit.categories.length === ALL_CATEGORY_VALUES.length ? null : edit.categories,
+          features: edit.features,
+          locationIds: edit.locationIds,
         }),
       });
       const data = await res.json();
@@ -405,6 +479,8 @@ export default function AdminNurseriesPage() {
         setEditError("Some fields need attention — please check the form and retry.");
       } else if (code === "not_found") {
         setEditError("That nursery no longer exists — refresh the page.");
+      } else if (code === "invalid_locations") {
+        setEditError("Those locations changed — refresh the page and pick again.");
       } else {
         setEditError("Could not save — please retry.");
       }
@@ -589,6 +665,39 @@ export default function AdminNurseriesPage() {
                   </label>
                 </div>
               </div>
+              <div className="sm:col-span-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Locations served (optional)</span>
+                <p className="mt-1 text-xs text-[#8E9A84]">
+                  Pick the pincodes this nursery delivers to — customers searching those pincodes see it with a “Delivers to
+                  your pincode” verdict. The nursery admin can add or remove their own later from Seller → Locations.
+                </p>
+                {activeLocations.length === 0 ? (
+                  <p className="mt-2 rounded-xl bg-[#F7F3E8] px-3 py-2 text-xs text-[#66735F]">
+                    The master list is empty — skip this for now. The nursery admin adds their own pincodes from their seller
+                    console after their first login (new pincodes join the master list automatically).
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {activeLocations.map((l) => {
+                      const on = form.locationIds.includes(l.id);
+                      return (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => toggleOnboardLocation(l.id)}
+                          className={
+                            on
+                              ? "rounded-xl border-2 border-[#2F6B3F] bg-[#EDF2E6] px-3 py-1.5 text-xs font-semibold text-[#24562F]"
+                              : "rounded-xl border border-[#1C3A2A]/15 bg-white px-3 py-1.5 text-xs font-semibold text-[#1C3A2A]/70 hover:border-[#2F6B3F]/50"
+                          }
+                        >
+                          {l.pincode} · {l.city}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <label className="block sm:col-span-2">
                 <span className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Growing area (optional)</span>
                 <input
@@ -687,6 +796,40 @@ export default function AdminNurseriesPage() {
                   <div className="sm:col-span-2">
                     <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Categories allowed</p>
                     <p className="mt-0.5 text-[#20291D]">{categoriesText(n)}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Locations served</p>
+                    {n.serviceAreas.length === 0 ? (
+                      <p className="mt-0.5 text-sm text-[#20291D]">
+                        None yet — the nursery admin adds them from Seller → Locations.
+                      </p>
+                    ) : (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {n.serviceAreas.map((sa) => (
+                          <Pill key={sa.locationId} tone="cream">
+                            {sa.pincode} · {sa.city}
+                          </Pill>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Modules & payments</p>
+                    {(() => {
+                      const f = readNurseryFeatures(n.features);
+                      const off = NURSERY_FEATURE_KEYS.filter((k) => !f[k]);
+                      return off.length === 0 ? (
+                        <p className="mt-0.5 text-sm text-[#20291D]">All enabled</p>
+                      ) : (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {off.map((k) => (
+                            <Pill key={k} tone="rose">
+                              {NURSERY_FEATURE_META[k].label} off
+                            </Pill>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -843,6 +986,65 @@ export default function AdminNurseriesPage() {
                                 onChange={() => toggleCategory(c.v)}
                               />
                               {c.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Locations served</span>
+                        <p className="mt-1 text-xs text-[#8E9A84]">
+                          The exact set this nursery serves — saving replaces the whole list. The nursery admin can also
+                          manage their own from Seller → Locations.
+                        </p>
+                        {activeLocations.length === 0 ? (
+                          <p className="mt-2 rounded-xl bg-[#F7F3E8] px-3 py-2 text-xs text-[#66735F]">
+                            The master list is empty. The nursery admin adds their own pincodes from their seller console —
+                            new pincodes join the master list automatically.
+                          </p>
+                        ) : (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {activeLocations.map((l) => {
+                              const on = edit.locationIds.includes(l.id);
+                              return (
+                                <button
+                                  key={l.id}
+                                  type="button"
+                                  onClick={() => toggleEditLocation(l.id)}
+                                  className={
+                                    on
+                                      ? "rounded-xl border-2 border-[#2F6B3F] bg-[#EDF2E6] px-3 py-1.5 text-xs font-semibold text-[#24562F]"
+                                      : "rounded-xl border border-[#1C3A2A]/15 bg-white px-3 py-1.5 text-xs font-semibold text-[#1C3A2A]/70 hover:border-[#2F6B3F]/50"
+                                  }
+                                >
+                                  {l.pincode} · {l.city}
+                                  {l.servingCount > 0 ? (
+                                    <span className="ml-1 font-normal text-[#8E9A84]">({l.servingCount} serving)</span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-2xl bg-[#F7F3E8] p-4 sm:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#66735F]">Modules &amp; payments</span>
+                        <p className="mt-1 text-xs text-[#8E9A84]">
+                          The opt-in sheet for this nursery — unticked modules disappear from their seller console, and the
+                          payment switches also shape what buyers can choose at checkout.
+                        </p>
+                        <div className="mt-2 grid gap-2 text-sm text-[#20291D] sm:grid-cols-2">
+                          {NURSERY_FEATURE_KEYS.map((key) => (
+                            <label key={key} className="flex cursor-pointer items-start gap-2 rounded-xl bg-white p-2">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={edit.features[key] !== false}
+                                onChange={() => toggleEditFeature(key)}
+                              />
+                              <span>
+                                <span className="block font-semibold">{NURSERY_FEATURE_META[key].label}</span>
+                                <span className="block text-xs text-[#8E9A84]">{NURSERY_FEATURE_META[key].hint}</span>
+                              </span>
                             </label>
                           ))}
                         </div>

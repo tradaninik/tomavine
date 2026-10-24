@@ -4,9 +4,11 @@ import { districtByCode, deliveryEta, haversineKm } from "@/lib/geo";
 
 // Delivery verdicts + proximity sorting (Location Backbone v1).
 //
-// Two independent inputs:
-//   ?pincode=XXXXXX  -> postal-circle verdict logic (unchanged from
-//                       the original implementation)
+// Three independent inputs:
+//   ?pincode=XXXXXX  -> verdict logic: an explicit NurseryServiceArea
+//                       match wins first (mission F — the nursery admin's
+//                       own list), otherwise the postal-circle scope logic
+//                       (unchanged from the original implementation)
 //   ?district=CODE   -> proximity: distance from the district
 //                       centroid to each nursery's geo binding
 //                       (Nursery.districtCode/lat/lng, backfilled by
@@ -24,7 +26,13 @@ type Verdict = { delivers: boolean; label: string };
 function deliveryVerdict(
   nursery: { pincode: string; city: string; scope: string; scopeKm: number | null },
   pincode: string,
+  served: boolean,
 ): Verdict {
+  // The nursery's own service-area list is the most specific truth —
+  // a linked pincode delivers even when the scope heuristic wouldn't.
+  if (served) {
+    return { delivers: true, label: "Delivers to your pincode" };
+  }
   if (nursery.scope === "INDIA") {
     return { delivers: true, label: "Ships across India" };
   }
@@ -53,7 +61,10 @@ export async function GET(req: Request) {
 
   const rows = await db.nursery.findMany({
     where: { status: "VERIFIED" },
-    include: { _count: { select: { products: { where: { hidden: false } } } } },
+    include: {
+      _count: { select: { products: { where: { hidden: false } } } },
+      serviceAreas: { include: { location: { select: { pincode: true, active: true } } } },
+    },
     orderBy: { ratingAvg: "desc" },
   });
 
@@ -70,6 +81,9 @@ export async function GET(req: Request) {
           nurseryLatLng: nurseryPoint,
         })
       : null;
+    const served = pincode
+      ? n.serviceAreas.some((sa) => sa.location.active && sa.location.pincode === pincode)
+      : false;
     return {
       id: n.id,
       name: n.name,
@@ -86,9 +100,10 @@ export async function GET(req: Request) {
       physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
       districtCode: n.districtCode,
       productCount: n._count.products,
+      serviceAreaCount: n.serviceAreas.length,
       distanceKm: distanceKm,
       eta: eta ? { band: eta.band, minDays: eta.minDays, maxDays: eta.maxDays } : null,
-      verdict: pincode ? deliveryVerdict(n, pincode) : null,
+      verdict: pincode ? deliveryVerdict(n, pincode, served) : null,
     };
   });
 
