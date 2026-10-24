@@ -1,5 +1,13 @@
-import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
+import { loadDbEnv } from "./lib/db-env.mjs";
+
+// Shared loader: .env wins over a stray non-postgres shell
+// DATABASE_URL, and prints which database is in effect.
+// (Previously: existing process env vars always won, so a stray
+// libsql:// URL silently overrode .env.)
+loadDbEnv();
+
+const prisma = new PrismaClient();
 
 // ─────────────────────────────────────────────────────────────
 // One-time founder promotion — Batch 4a, Wave 4.
@@ -22,25 +30,6 @@ if (!/^\+91\d{10}$/.test(PHONE)) {
   console.error("Phone must look like +91XXXXXXXXXX — got: " + PHONE);
   process.exit(1);
 }
-
-// Plain node doesn't load .env the way the dev server does —
-// load it ourselves (no dotenv dependency). Existing process
-// env vars always win.
-if (!process.env.DATABASE_URL) {
-  try {
-    const env = readFileSync(new URL("../.env", import.meta.url), "utf8");
-    for (const line of env.split(/\r?\n/)) {
-      const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)\s*$/);
-      if (m && !process.env[m[1]]) {
-        process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-      }
-    }
-  } catch {
-    // no .env found — Prisma will surface the missing URL itself
-  }
-}
-
-const prisma = new PrismaClient();
 
 async function main() {
   const user = await prisma.user.findUnique({ where: { phone: PHONE } });

@@ -16,19 +16,12 @@
 // Nurseries whose city does not match are left untouched and
 // reported at the end (they simply sort last until fixed).
 
-import { readFileSync, existsSync } from "fs";
 import { PrismaClient } from "@prisma/client";
+import { loadDbEnv } from "./lib/db-env.mjs";
 
-// Tiny .env loader (no dotenv dependency needed) — same pattern as
-// scripts/add-photos.mjs.
-if (!process.env.DATABASE_URL && existsSync(".env")) {
-  for (const line of readFileSync(".env", "utf8").split("\n")) {
-    const m = line.match(/^\s*DATABASE_URL\s*=\s*"?([^"\n]+)"?\s*$/);
-    if (m) {
-      process.env.DATABASE_URL = m[1].trim();
-    }
-  }
-}
+// Shared loader: .env wins over a stray non-postgres shell
+// DATABASE_URL, and prints which database is in effect.
+loadDbEnv();
 
 const prisma = new PrismaClient();
 
