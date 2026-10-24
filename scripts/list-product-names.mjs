@@ -6,7 +6,9 @@
 // database (e.g. when a name has drifted from the seed data) so
 // name-matched update scripts like add-photos.mjs can be fixed.
 // Also prints subCategory, botanical, priceMin/mrp and stock — the
-// inputs needed for the category backfill map and photo decisions.
+// inputs needed for the category backfill map and photo decisions —
+// plus an all-nurseries report (including zero-product nurseries, with
+// status/retailOk) to settle visibility questions.
 //
 // This script never writes anything — it only prints.
 
@@ -70,7 +72,30 @@ async function main() {
   }
   console.log("");
   console.log(`Photos: ${withPhoto} of ${products.length} have images, ${products.length - withPhoto} still need one.`);
-  console.log(`Hidden: ${hiddenCount}. Nurseries: ${nurserySlugs.size} (${[...nurserySlugs].join(", ")}).`);
+  console.log(`Hidden: ${hiddenCount}. Nurseries with products: ${nurserySlugs.size} (${[...nurserySlugs].join(", ")}).`);
+
+  // All nurseries (including zero-product ones): status/retailOk decide
+  // storefront visibility (VERIFIED + retailOk => products listed), so
+  // this table settles questions like zz-selfserve-test-nursery.
+  const nurseries = await prisma.nursery.findMany({
+    select: { slug: true, status: true, retailOk: true, image: true },
+    orderBy: { slug: "asc" },
+  });
+  const perNursery = {};
+  for (const p of products) {
+    const e = (perNursery[p.nursery.slug] ??= { total: 0, visible: 0 });
+    e.total += 1;
+    if (!p.hidden) e.visible += 1;
+  }
+  console.log("");
+  console.log("Nurseries (all, incl. zero-product):");
+  for (const n of nurseries) {
+    const c = perNursery[n.slug] ?? { total: 0, visible: 0 };
+    const img = n.image ? "yes" : "none";
+    console.log(
+      `  ${n.slug}  status:${n.status} retailOk:${n.retailOk ? "yes" : "no"}  products:${c.total} (visible ${c.visible})  image:${img}`,
+    );
+  }
   console.log("");
   console.log("Names are JSON-quoted so trailing spaces / dashes are visible.");
   console.log("Line format: (category/subCategory, priceMin/mrp in rupees, stock) image — bot:botanical.");
