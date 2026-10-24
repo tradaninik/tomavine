@@ -50,15 +50,15 @@ enum PaymentStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  name      String?
-  role      Role     @default(CUSTOMER)
-  lang      String   @default("en")
-  city      String?
-  pincode   String?
-  permissions Json?
-  createdAt DateTime @default(now())
+  id            String           @id @default(cuid())
+  phone         String           @unique
+  name          String?
+  role          Role             @default(CUSTOMER)
+  lang          String           @default("en")
+  city          String?
+  pincode       String?
+  permissions   Json?
+  createdAt     DateTime         @default(now())
   orders        Order[]
   reviews       Review[]
   journals      PlantJournal[]
@@ -71,20 +71,20 @@ model User {
 }
 
 model Nursery {
-  id             String   @id @default(cuid())
-  ownerId        String   @unique
-  owner          User     @relation(fields: [ownerId], references: [id])
+  id             String             @id @default(cuid())
+  ownerId        String             @unique
+  owner          User               @relation(fields: [ownerId], references: [id])
   name           String
-  slug           String   @unique
+  slug           String             @unique
   phone          String
   gstin          String
   city           String
   area           String
   pincode        String
-  scope          Scope    @default(RADIUS)
+  scope          Scope              @default(RADIUS)
   scopeKm        Int?
-  bulkOk         Boolean  @default(true)
-  retailOk       Boolean  @default(true)
+  bulkOk         Boolean            @default(true)
+  retailOk       Boolean            @default(true)
   status         VerificationStatus @default(PENDING)
   physVerifiedAt DateTime?
   growArea       String?
@@ -93,7 +93,7 @@ model Nursery {
   lat            Float?
   lng            Float?
   categories     Json?
-  ratingAvg      Float    @default(0)
+  ratingAvg      Float              @default(0)
   products       Product[]
   services       ServiceListing[]
   orders         Order[]
@@ -104,32 +104,61 @@ model Nursery {
   @@index([districtCode])
 }
 
+// Two-level browse tree (phase 2a). Tops have parentId null; subs point
+// at their top. slug is globally unique (future /shop/c/[slug] URLs).
+// names is the 6-language display dictionary {en,hi,te,kn,ta,mr}.
+// gstRate: whole percent (5 = 5%). null = inherit from parent; at top
+// level null = keep the legacy code-based rate until set.
+// legacyKey (tops only, unique): the Product.category string this top
+// replaces during the transition; dropped when legacy fields retire.
+model Category {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  children  Category[] @relation("CategoryTree")
+  names     Json?
+  emoji     String?
+  gstRate   Int?
+  legacyKey String?    @unique
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  products  Product[]
+
+  @@index([parentId])
+  @@index([active, sortOrder])
+}
+
 model Product {
-  id         String   @id @default(cuid())
-  nurseryId  String
-  nursery    Nursery @relation(fields: [nurseryId], references: [id])
-  category   String
-  nameEn     String
-  names      Json?
-  botanical  String?
-  badges     Json?
-  care       Json?
-  agri       Json?
-  provenance Json?
-  priceMin   Int
-  mrp        Int
-  stock      Int      @default(0)
-  hidden     Boolean  @default(false)
-  subCategory String?
-  image       String?
-  createdAt  DateTime @default(now())
-  variants    ProductVariant[]
-  rescue      RescueListing?
-  orderItems  OrderItem[]
-  reviews     Review[]
+  id           String           @id @default(cuid())
+  nurseryId    String
+  nursery      Nursery          @relation(fields: [nurseryId], references: [id])
+  category     String
+  categoryId   String?
+  categoryNode Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  nameEn       String
+  names        Json?
+  botanical    String?
+  badges       Json?
+  care         Json?
+  agri         Json?
+  provenance   Json?
+  priceMin     Int
+  mrp          Int
+  stock        Int              @default(0)
+  hidden       Boolean          @default(false)
+  subCategory  String?
+  image        String?
+  createdAt    DateTime         @default(now())
+  variants     ProductVariant[]
+  rescue       RescueListing?
+  orderItems   OrderItem[]
+  reviews      Review[]
 
   @@index([nurseryId])
   @@index([category])
+  @@index([categoryId])
 }
 
 model ProductVariant {
@@ -143,33 +172,33 @@ model ProductVariant {
 
 model RescueListing {
   productId String   @unique
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   pct       Int
   expiresAt DateTime
 }
 
 model Order {
-  id          String  @id @default(cuid())
-  code        String  @unique
+  id          String       @id @default(cuid())
+  code        String       @unique
   userId      String
-  user        User    @relation(fields: [userId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
   nurseryId   String
-  nursery     Nursery @relation(fields: [nurseryId], references: [id])
-  status      OrderStatus @default(PENDING)
+  nursery     Nursery      @relation(fields: [nurseryId], references: [id])
+  status      OrderStatus  @default(PENDING)
   mode        DeliveryMode @default(DELIVERY)
   subtotal    Int
   deliveryFee Int
   tax         Int
-  discount    Int     @default(0)
+  discount    Int          @default(0)
   total       Int
   address     Json
   deliveryOtp String?
   meta        Json?
-  createdAt   DateTime @default(now())
-  items   OrderItem[]
-  events  OrderEvent[]
-  payment Payment?
-  review  Review?
+  createdAt   DateTime     @default(now())
+  items       OrderItem[]
+  events      OrderEvent[]
+  payment     Payment?
+  review      Review?
 
   @@index([userId])
   @@index([nurseryId, status])
@@ -189,27 +218,27 @@ model OrderItem {
 }
 
 model OrderEvent {
-  id        String @id @default(cuid())
+  id        String      @id @default(cuid())
   orderId   String
-  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   status    OrderStatus
   note      String?
   actorRole Role
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 }
 
 model Payment {
-  id             String @id @default(cuid())
-  orderId        String @unique
-  order          Order  @relation(fields: [orderId], references: [id])
-  provider       String @default("razorpay")
-  rzpOrderId     String? @unique
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  order          Order         @relation(fields: [orderId], references: [id])
+  provider       String        @default("razorpay")
+  rzpOrderId     String?       @unique
   rzpPaymentId   String?
   method         String?
   amount         Int
   status         PaymentStatus @default(CREATED)
   capturedAt     DateTime?
-  idempotencyKey String? @unique
+  idempotencyKey String?       @unique
 }
 
 model WebhookEvent {
@@ -225,11 +254,11 @@ model WebhookEvent {
 model Review {
   id        String   @id @default(cuid())
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
   userId    String
-  user      User @relation(fields: [userId], references: [id])
-  orderId   String? @unique
-  order     Order?  @relation(fields: [orderId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   String?  @unique
+  order     Order?   @relation(fields: [orderId], references: [id])
   stars     Int
   text      String
   reply     String?
@@ -237,55 +266,55 @@ model Review {
 }
 
 model ServiceListing {
-  id          String @id @default(cuid())
-  nurseryId   String
-  nursery     Nursery @relation(fields: [nurseryId], references: [id])
-  type        String
-  name        String
-  price       Int
-  includes    Json
+  id            String         @id @default(cuid())
+  nurseryId     String
+  nursery       Nursery        @relation(fields: [nurseryId], references: [id])
+  type          String
+  name          String
+  price         Int
+  includes      Json
   subscriptions Subscription[]
 }
 
 model Subscription {
-  id          String @id @default(cuid())
+  id          String         @id @default(cuid())
   userId      String
-  user        User @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
   serviceId   String
   service     ServiceListing @relation(fields: [serviceId], references: [id])
-  status      String @default("active")
+  status      String         @default("active")
   nextVisitAt DateTime
 }
 
 model PlantJournal {
   id        String @id @default(cuid())
   userId    String
-  user      User @relation(fields: [userId], references: [id])
+  user      User   @relation(fields: [userId], references: [id])
   productId String
   orderId   String
   entries   Json
 }
 
 model BulkLead {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   qty       Int
   city      String
   company   String
   notes     String?
-  status    String @default("new")
+  status    String  @default("new")
   parts     Json?
   quotes    Quote[]
 }
 
 model Quote {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   leadId    String
   lead      BulkLead @relation(fields: [leadId], references: [id])
   nurseryId String
-  nursery   Nursery @relation(fields: [nurseryId], references: [id])
+  nursery   Nursery  @relation(fields: [nurseryId], references: [id])
   amount    Int
-  status    String @default("sent")
+  status    String   @default("sent")
 }
 
 model OtpCode {
@@ -301,9 +330,9 @@ model OtpCode {
 }
 
 model WhatsappBinding {
-  userId           String @id
-  user             User @relation(fields: [userId], references: [id])
-  waId             String @unique
+  userId           String  @id
+  user             User    @relation(fields: [userId], references: [id])
+  waId             String  @unique
   lastAlertOrderId String?
 }
 
@@ -320,9 +349,9 @@ model WhatsappLog {
 }
 
 model AuditLog {
-  id      String @id @default(cuid())
+  id      String   @id @default(cuid())
   actorId String
-  actor   User @relation(fields: [actorId], references: [id])
+  actor   User     @relation(fields: [actorId], references: [id])
   action  String
   entity  String
   meta    Json?

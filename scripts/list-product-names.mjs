@@ -34,6 +34,8 @@ async function main() {
       stock: true,
       hidden: true,
       image: true,
+      categoryId: true,
+      categoryNode: { select: { slug: true, parent: { select: { slug: true } } } },
       nursery: { select: { slug: true } },
     },
     orderBy: [{ nursery: { slug: "asc" } }, { nameEn: "asc" }],
@@ -46,8 +48,11 @@ async function main() {
     const cat = p.subCategory ? `${p.category}/${p.subCategory}` : p.category;
     const hid = p.hidden ? ", hidden" : "";
     const bot = p.botanical ? ` bot:${JSON.stringify(p.botanical)}` : "";
+    const tree = p.categoryNode
+      ? ` tree:${p.categoryNode.parent ? p.categoryNode.parent.slug + "/" + p.categoryNode.slug : p.categoryNode.slug}`
+      : " tree:-";
     console.log(
-      `  [${p.nursery.slug}] ${JSON.stringify(p.nameEn)}  (${cat}, ${p.priceMin}/${p.mrp}, stock ${p.stock}${hid}) image:${photo}${bot}`,
+      `  [${p.nursery.slug}] ${JSON.stringify(p.nameEn)}  (${cat}, ${p.priceMin}/${p.mrp}, stock ${p.stock}${hid}) image:${photo}${bot}${tree}`,
     );
   }
 
@@ -98,7 +103,7 @@ async function main() {
   }
   console.log("");
   console.log("Names are JSON-quoted so trailing spaces / dashes are visible.");
-  console.log("Line format: (category/subCategory, priceMin/mrp in rupees, stock) image — bot:botanical.");
+  console.log("Line format: (category/subCategory, priceMin/mrp in rupees, stock) image — bot:botanical tree:category-tree-slug.");
   console.log("Copy the exact name into the map in scripts/add-photos.mjs (or the category backfill map).");
 }
 
