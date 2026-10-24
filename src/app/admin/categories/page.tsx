@@ -1,15 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { Btn, Card, Empty, ErrBox, Loading, Pill, inputCls } from "../ui";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
-// Mission X — the category-tree editor. The two-level tree (phase
-// 2a seed: 11 tops + 45 subs) is what the storefront browse flips
-// to in phase 2c; until then the storefront runs on the legacy
-// 5-category strings, so every edit here is safe to make live.
+// ─────────────────────────────────────────────────────────────
+// Mission X2 — the category-tree console, rebuilt around three
+// complaints from the first pass:
+//
+//   1. "count isn't seen"  → every top now carries a three-tile
+//      count strip (products / here / in subs) and every sub row
+//      shows its own count inline.
+//   2. "deactivating the subs — steps aren't clear" → no more
+//      native confirm() dialogs. Deactivate swaps the row's own
+//      actions into an inline question with the consequence
+//      written out; one more tap does it, Keep backs out.
+//   3. "Taxonomy needs to link + insights by region and other
+//      types" → an insights card above the tree: translation
+//      coverage per region (click a language to list what's
+//      missing, click a node to edit it), the attribute types
+//      with term counts (deep-links into the taxonomy console's
+//      kind tabs), and the product-mapping distribution.
+// ─────────────────────────────────────────────────────────────
 
 type Cat = {
   id: string;
@@ -24,12 +39,26 @@ type Cat = {
   createdAt: string;
 };
 
+type KindSum = { code: string; label: string; emoji: string; total: number; active: number };
+
 const REGIONAL_LANGS: { code: string; label: string }[] = [
   { code: "hi", label: "Hindi" },
   { code: "te", label: "Telugu" },
   { code: "kn", label: "Kannada" },
   { code: "ta", label: "Tamil" },
   { code: "mr", label: "Marathi" },
+];
+
+// Region chips use the language's own name — the owner curates
+// translations here, so the chip should read the way the storefront
+// will show it.
+const REGIONS: { code: string; native: string; label: string }[] = [
+  { code: "en", native: "English", label: "English" },
+  { code: "hi", native: "हिन्दी", label: "Hindi" },
+  { code: "te", native: "తెలుగు", label: "Telugu" },
+  { code: "kn", native: "ಕನ್ನಡ", label: "Kannada" },
+  { code: "ta", native: "தமிழ்", label: "Tamil" },
+  { code: "mr", native: "मराठी", label: "Marathi" },
 ];
 
 const GST_OPTIONS: { value: string; label: string }[] = [
@@ -39,6 +68,12 @@ const GST_OPTIONS: { value: string; label: string }[] = [
   { value: "12", label: "12%" },
   { value: "18", label: "18%" },
   { value: "28", label: "28%" },
+];
+
+const FILTERS: { v: "all" | "active" | "off"; label: string }[] = [
+  { v: "all", label: "All" },
+  { v: "active", label: "Active" },
+  { v: "off", label: "Inactive" },
 ];
 
 function enOf(c: Cat): string {
@@ -72,11 +107,11 @@ function errText(code: string, label: string): string {
   }
 }
 
-function GstBadge({ c, isTop }: { c: Cat; isTop: boolean }) {
+function gstLabel(c: Cat, isTop: boolean): string {
   if (c.gstRate === null) {
-    return <Pill tone="cream">{isTop ? "GST default" : "GST ↑ inherit"}</Pill>;
+    return isTop ? "default" : "inherit";
   }
-  return <Pill tone="sky">GST {c.gstRate}%</Pill>;
+  return `${c.gstRate}%`;
 }
 
 function NamesLine({ names }: { names: Record<string, string> | null }) {
@@ -123,16 +158,20 @@ export default function AdminCategoriesPage() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [unmapped, setUnmapped] = useState(0);
+  const [kinds, setKinds] = useState<KindSum[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "active" | "off">("all");
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null); // inline deactivation confirm
   const [actError, setActError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const [missingLang, setMissingLang] = useState<string | null>(null); // expanded region chip
 
   useEffect(() => {
     let active = true;
@@ -147,6 +186,7 @@ export default function AdminCategoriesPage() {
           setCats(data.categories);
           setCounts(data.counts ?? {});
           setUnmapped(typeof data.unmapped === "number" ? data.unmapped : 0);
+          setKinds(Array.isArray(data.taxonomy) ? data.taxonomy : []);
           setError(false);
         }
       })
@@ -168,9 +208,17 @@ export default function AdminCategoriesPage() {
     cats
       .filter((c) => c.parentId === id)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.slug.localeCompare(b.slug));
-  const treeCountOf = (top: Cat) =>
-    (counts[top.id] ?? 0) + subsOf(top.id).reduce((sum, s) => sum + (counts[s.id] ?? 0), 0);
-  const inactiveCount = cats.filter((c) => !c.active).length;
+  const ownCountOf = (c: Cat) => counts[c.id] ?? 0;
+  const treeCountOf = (top: Cat) => ownCountOf(top) + subsOf(top.id).reduce((sum, s) => sum + ownCountOf(s), 0);
+  const activeCount = cats.filter((c) => c.active).length;
+  const inactiveCount = cats.length - activeCount;
+
+  // Region coverage — how many nodes carry a name in each language.
+  const filledIn = (code: string) => cats.filter((c) => (c.names?.[code] ?? "").trim() !== "").length;
+  const missingIn = (code: string) => cats.filter((c) => (c.names?.[code] ?? "").trim() === "");
+
+  const mappedTotal = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const productTotal = mappedTotal + unmapped;
 
   const q = query.trim().toLowerCase();
   const matches = (c: Cat) =>
@@ -184,6 +232,7 @@ export default function AdminCategoriesPage() {
     setForm({ ...blankForm(), parentId });
     setFormError("");
     setOkMsg("");
+    setPendingId(null);
   }
 
   function openEdit(c: Cat) {
@@ -205,19 +254,10 @@ export default function AdminCategoriesPage() {
     });
     setFormError("");
     setOkMsg("");
+    setPendingId(null);
   }
 
-  async function toggleActive(c: Cat) {
-    if (c.active) {
-      const childCount = subsOf(c.id).filter((s) => s.active).length;
-      const extra = childCount > 0 ? ` Its ${childCount} active subcategories hide along with it.` : "";
-      const sure = window.confirm(
-        `Deactivate “${enOf(c)}”? It disappears from the new storefront browse (phase 2c) and seller pickers until reactivated.${extra}`
-      );
-      if (!sure) {
-        return;
-      }
-    }
+  async function doToggle(c: Cat) {
     setBusyId(c.id);
     setActError("");
     try {
@@ -231,12 +271,51 @@ export default function AdminCategoriesPage() {
         throw new Error((data && data.error) ?? "failed");
       }
       setCats((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: !c.active } : x)));
-      setOkMsg(`${enOf(c)} is now ${c.active ? "inactive" : "active"}.`);
+      setPendingId(null);
+      setOkMsg(
+        c.active
+          ? `“${enOf(c)}” is now inactive — hidden from the storefront browse until reactivated.`
+          : `“${enOf(c)}” is back on.`,
+      );
     } catch (e) {
       setActError(e instanceof Error ? errText(e.message, enOf(c)) : "Action failed");
     } finally {
       setBusyId(null);
     }
+  }
+
+  // One row's action cluster. Active nodes swap into an inline
+  // question when Deactivate is tapped — the consequence is written
+  // next to the buttons, so the "steps" read themselves.
+  function actionsFor(c: Cat, isTop: boolean): React.ReactNode {
+    if (!c.active) {
+      return (
+        <Btn size="sm" variant="primary" disabled={busyId === c.id} onClick={() => doToggle(c)}>
+          Reactivate
+        </Btn>
+      );
+    }
+    if (pendingId === c.id) {
+      const activeSubs = isTop ? subsOf(c.id).filter((s) => s.active).length : 0;
+      return (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="max-w-56 text-xs text-[#8A5A14]">
+            Hides from the storefront browse{activeSubs > 0 ? ` — its ${activeSubs} active subs hide too` : ""}.
+          </span>
+          <Btn size="sm" variant="danger" disabled={busyId === c.id} onClick={() => doToggle(c)}>
+            Yes, deactivate
+          </Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setPendingId(null)}>
+            Keep
+          </Btn>
+        </span>
+      );
+    }
+    return (
+      <Btn size="sm" variant="ghost" onClick={() => setPendingId(c.id)}>
+        Deactivate
+      </Btn>
+    );
   }
 
   async function submitForm(e: FormEvent<HTMLFormElement>) {
@@ -334,7 +413,17 @@ export default function AdminCategoriesPage() {
     );
   }
 
-  const visibleTops = tops.filter((t) => matches(t) || subsOf(t.id).some(matches));
+  const searchPasses = (t: Cat) => matches(t) || subsOf(t.id).some(matches);
+  const filterPasses = (t: Cat) => filter === "all" || (filter === "active" ? t.active : !t.active);
+  const visibleTops = tops.filter((t) => searchPasses(t) && filterPasses(t));
+
+  // Product distribution — tops that actually hold products, most
+  // first. Bar width is relative to the busiest top.
+  const distribution = tops
+    .map((t) => ({ top: t, n: treeCountOf(t) }))
+    .filter((d) => d.n > 0)
+    .sort((a, b) => b.n - a.n);
+  const maxDist = distribution.length > 0 ? distribution[0].n : 1;
 
   return (
     <div className="space-y-4">
@@ -347,14 +436,50 @@ export default function AdminCategoriesPage() {
         formOpen={form !== null && form.id === null}
       />
 
-      <div className="sm:max-w-md">
-        <input
-          className={inputCls}
-          placeholder="Search name, slug, legacy key or translation…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-52 flex-1 sm:max-w-md">
+          <input
+            className={inputCls}
+            placeholder="Search name, slug, legacy key or translation…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-1 rounded-2xl bg-white p-1 shadow-sm" role="tablist" aria-label="Filter by state">
+          {FILTERS.map((f) => {
+            const on = filter === f.v;
+            return (
+              <button
+                key={f.v}
+                type="button"
+                onClick={() => setFilter(f.v)}
+                className={
+                  on
+                    ? "rounded-xl bg-[#2F6B3F] px-3 py-1.5 text-xs font-semibold text-white"
+                    : "rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1C3A2A]/60 hover:bg-[#F7F3E8]"
+                }
+              >
+                {f.label} · {f.v === "all" ? cats.length : f.v === "active" ? activeCount : inactiveCount}
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      <Insights
+        cats={cats}
+        kinds={kinds}
+        missingLang={missingLang}
+        setMissingLang={setMissingLang}
+        filledIn={filledIn}
+        missingIn={missingIn}
+        mappedTotal={mappedTotal}
+        productTotal={productTotal}
+        unmapped={unmapped}
+        distribution={distribution}
+        maxDist={maxDist}
+        onEditMissing={(c) => openEdit(c)}
+      />
 
       {actError ? <ErrBox>{actError}</ErrBox> : null}
 
@@ -384,8 +509,10 @@ export default function AdminCategoriesPage() {
       ) : (
         <div className="space-y-5">
           {visibleTops.map((t) => {
-            const topMatch = matches(t);
-            const subs = subsOf(t.id).filter((s) => topMatch || matches(s));
+            const subs = subsOf(t.id).filter((s) => matches(t) || matches(s));
+            const allSubs = subsOf(t.id);
+            const subsOn = allSubs.filter((s) => s.active).length;
+            const inSubs = allSubs.reduce((sum, s) => sum + ownCountOf(s), 0);
             return (
               <Card key={t.id} className={t.active ? "" : "opacity-75"}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -394,19 +521,15 @@ export default function AdminCategoriesPage() {
                       <span className="text-2xl" aria-hidden="true">
                         {t.emoji ?? "🌱"}
                       </span>
-                      <p className="text-xl font-semibold text-[#20291D]" style={SERIF}>
+                      <p className={`text-xl font-semibold ${t.active ? "text-[#20291D]" : "text-[#8E9A84] line-through"}`} style={SERIF}>
                         {enOf(t)}
                       </p>
-                      <code className="rounded-full border border-[#1C3A2A]/10 bg-[#F7F3E8] px-2 py-0.5 text-xs text-[#66735F]">
-                        {t.slug}
-                      </code>
-                      {t.legacyKey ? <Pill tone="cream">legacy: {t.legacyKey}</Pill> : null}
-                      <GstBadge c={t} isTop />
-                      {t.active ? <Pill tone="leaf">Active</Pill> : <Pill tone="rose">Inactive</Pill>}
-                      <Pill tone="cream">
-                        {treeCountOf(t)} product{treeCountOf(t) === 1 ? "" : "s"}
-                      </Pill>
+                      {!t.active ? <Pill tone="rose">Off</Pill> : null}
                     </div>
+                    <p className="mt-1 text-xs text-[#8E9A84]">
+                      <code>{t.slug}</code>
+                      {t.legacyKey ? <> · legacy <code>{t.legacyKey}</code></> : null} · sort {t.sortOrder}
+                    </p>
                     <NamesLine names={t.names} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -416,69 +539,84 @@ export default function AdminCategoriesPage() {
                     <Btn size="sm" variant="ghost" onClick={() => openCreate(t.id)}>
                       + Sub
                     </Btn>
-                    <Btn
-                      size="sm"
-                      variant={t.active ? "outline" : "primary"}
-                      disabled={busyId === t.id}
-                      onClick={() => toggleActive(t)}
-                    >
-                      {t.active ? "Deactivate" : "Reactivate"}
-                    </Btn>
+                    {actionsFor(t, true)}
                   </div>
                 </div>
 
-                {subs.length > 0 ? (
-                  <div className="mt-4 grid gap-3 border-t border-[#E4E0CE] pt-4 sm:grid-cols-2 xl:grid-cols-3">
+                {/* Count strip — the numbers this console exists for. */}
+                <div className="mt-3 grid max-w-md grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl border border-[#A9C3A0]/50 bg-[#EDF2E6] px-2 py-2">
+                    <p className="text-2xl font-bold text-[#1C3A2A]" style={SERIF}>
+                      {treeCountOf(t)}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#66735F]">products</p>
+                  </div>
+                  <div className="rounded-xl border border-[#1C3A2A]/10 bg-[#F7F3E8] px-2 py-2">
+                    <p className="text-2xl font-bold text-[#1C3A2A]" style={SERIF}>
+                      {ownCountOf(t)}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#66735F]">here (direct)</p>
+                  </div>
+                  <div className="rounded-xl border border-[#1C3A2A]/10 bg-[#F7F3E8] px-2 py-2">
+                    <p className="text-2xl font-bold text-[#1C3A2A]" style={SERIF}>
+                      {inSubs}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#66735F]">in subs</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-[#8E9A84]">
+                  {subsOn}/{allSubs.length} subs on · GST {gstLabel(t, true)} · turn-off hides the whole branch
+                </p>
+
+                {allSubs.length === 0 ? (
+                  <p className="mt-3 border-t border-[#E4E0CE] pt-3 text-xs text-[#8E9A84]">
+                    No subcategories yet — “+ Sub” adds one.
+                  </p>
+                ) : (
+                  <ul className="mt-3 divide-y divide-[#E4E0CE] border-t border-[#E4E0CE]">
                     {subs.map((s) => {
-                      const count = counts[s.id] ?? 0;
+                      const count = ownCountOf(s);
                       return (
-                        <div
-                          key={s.id}
-                          className={
-                            s.active
-                              ? "rounded-2xl border border-[#1C3A2A]/10 bg-[#F7F3E8] p-3.5"
-                              : "rounded-2xl border border-dashed border-[#1C3A2A]/25 bg-white p-3.5 opacity-75"
-                          }
-                        >
-                          <div className="flex items-start justify-between gap-2">
+                        <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <span className="text-lg" aria-hidden="true">
+                              {s.emoji ?? "🌱"}
+                            </span>
                             <div className="min-w-0">
-                              <p className="truncate font-semibold text-[#20291D]">{enOf(s)}</p>
-                              <p className="mt-0.5 truncate text-xs text-[#8E9A84]">{s.slug}</p>
-                            </div>
-                            {s.active ? null : <Pill tone="rose">off</Pill>}
-                          </div>
-                          <NamesLine names={s.names} />
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            <GstBadge c={s} isTop={false} />
-                            <Pill tone="cream">
-                              {count} product{count === 1 ? "" : "s"}
-                            </Pill>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between border-t border-[#E4E0CE] pt-2.5">
-                            <span className="text-xs text-[#8E9A84]">sort {s.sortOrder}</span>
-                            <div className="flex items-center gap-1.5">
-                              <Btn size="sm" variant="ghost" onClick={() => openEdit(s)}>
-                                Edit
-                              </Btn>
-                              <Btn
-                                size="sm"
-                                variant="ghost"
-                                disabled={busyId === s.id}
-                                onClick={() => toggleActive(s)}
+                              <p
+                                className={`truncate text-sm font-semibold ${
+                                  s.active ? "text-[#20291D]" : "text-[#8E9A84] line-through"
+                                }`}
                               >
-                                {s.active ? "Deactivate" : "Reactivate"}
-                              </Btn>
+                                {enOf(s)}
+                                {!s.active ? <span className="ml-1.5 text-xs font-normal no-underline text-[#B9826A]">off</span> : null}
+                              </p>
+                              <p className="truncate text-xs text-[#8E9A84]">
+                                {s.slug} · GST {gstLabel(s, false)} · sort {s.sortOrder}
+                              </p>
                             </div>
                           </div>
-                        </div>
+                          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                            {count > 0 ? (
+                              <Pill tone="leaf">
+                                {count} product{count === 1 ? "" : "s"}
+                              </Pill>
+                            ) : (
+                              <span className="text-xs text-[#8E9A84]">0 products</span>
+                            )}
+                            <Btn size="sm" variant="ghost" onClick={() => openEdit(s)}>
+                              Edit
+                            </Btn>
+                            {actionsFor(s, false)}
+                          </div>
+                        </li>
                       );
                     })}
-                  </div>
-                ) : (
-                  <p className="mt-3 border-t border-[#E4E0CE] pt-3 text-xs text-[#8E9A84]">
-                    No subcategories{query.trim() ? " matching the search" : ""} — “+ Sub” adds one.
-                  </p>
+                  </ul>
                 )}
+                {subs.length === 0 && allSubs.length > 0 ? (
+                  <p className="mt-2 text-xs text-[#8E9A84]">No subs match the search — the others exist but are filtered out.</p>
+                ) : null}
               </Card>
             );
           })}
@@ -517,14 +655,163 @@ function Header({
         </div>
       </div>
       <p className="max-w-3xl text-sm text-[#66735F]">
-        The two-level browse tree for the storefront ({total} categories). The shop still runs on the
-        old 5-category layout — this tree takes over in phase 2c, so edit freely.
+        The two-level browse tree for the storefront ({total} categories). The insights panel below ties it to the
+        attribute types and the product catalog; the shop still runs on the old 5-category layout — this tree takes
+        over in phase 2c, so edit freely.
       </p>
       <p className="max-w-3xl text-xs text-[#8E9A84]">
-        ⚠ Re-running <code>scripts/seed-categories.mjs</code> resets the 56 seeded categories to seed
-        values — make this editor the source of truth after the last seed run.
+        ⚠ Re-running <code>scripts/seed-categories.mjs</code> resets the 56 seeded categories to seed values — make
+        this editor the source of truth after the last seed run.
       </p>
     </div>
+  );
+}
+
+function Insights({
+  cats,
+  kinds,
+  missingLang,
+  setMissingLang,
+  filledIn,
+  missingIn,
+  mappedTotal,
+  productTotal,
+  unmapped,
+  distribution,
+  maxDist,
+  onEditMissing,
+}: {
+  cats: Cat[];
+  kinds: KindSum[];
+  missingLang: string | null;
+  setMissingLang: Dispatch<SetStateAction<string | null>>;
+  filledIn: (code: string) => number;
+  missingIn: (code: string) => Cat[];
+  mappedTotal: number;
+  productTotal: number;
+  unmapped: number;
+  distribution: { top: Cat; n: number }[];
+  maxDist: number;
+  onEditMissing: (c: Cat) => void;
+}) {
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold text-[#1C3A2A]" style={SERIF}>
+        Insights
+      </h2>
+      <p className="mt-0.5 text-xs text-[#8E9A84]">
+        How the catalog reads today — regional translation coverage, the attribute types, and where products sit.
+      </p>
+
+      <div className="mt-4">
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#66735F]">
+          Translations by region — click a language to see what&apos;s missing
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {REGIONS.map((r) => {
+            const filled = filledIn(r.code);
+            const done = filled === cats.length;
+            const expanded = missingLang === r.code;
+            return (
+              <button
+                key={r.code}
+                type="button"
+                onClick={() => setMissingLang(expanded ? null : r.code)}
+                title={r.label}
+                className={
+                  expanded
+                    ? "rounded-full border border-[#2F6B3F] bg-[#2F6B3F] px-3 py-1 text-xs font-bold text-white"
+                    : done
+                      ? "rounded-full border border-[#A9C3A0]/60 bg-[#EDF2E6] px-3 py-1 text-xs font-semibold text-[#24562F]"
+                      : "rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"
+                }
+              >
+                {r.native} {filled}/{cats.length}
+                {done ? " ✓" : ""}
+              </button>
+            );
+          })}
+        </div>
+        {missingLang ? (
+          <div className="mt-2 rounded-xl border border-[#1C3A2A]/10 bg-[#F7F3E8] p-3">
+            {missingIn(missingLang).length === 0 ? (
+              <p className="text-xs text-[#24562F]">Nothing missing — this region is fully translated.</p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-[#66735F]">
+                  {missingIn(missingLang).length} node{missingIn(missingLang).length === 1 ? "" : "s"} missing this
+                  name — tap one to edit it:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {missingIn(missingLang).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onEditMissing(c)}
+                      className="rounded-full border border-[#1C3A2A]/15 bg-white px-2.5 py-1 text-xs font-semibold text-[#20291D] transition hover:border-[#2F6B3F] hover:bg-[#EDF2E6]"
+                    >
+                      ✏️ {enOf(c)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4">
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#66735F]">
+          Attribute types — open one in the taxonomy console
+        </p>
+        {kinds.length === 0 ? (
+          <p className="text-xs text-[#8E9A84]">No taxonomy terms yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {kinds.map((k) => (
+              <Link
+                key={k.code}
+                href={`/admin/taxonomy?kind=${k.code}`}
+                className="rounded-full border border-[#1C3A2A]/15 bg-white px-3 py-1 text-xs font-semibold text-[#20291D] transition hover:border-[#2F6B3F] hover:bg-[#EDF2E6]"
+              >
+                {k.emoji} {k.label} · {k.active}/{k.total} →
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4">
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#66735F]">Product mapping</p>
+        <p className="text-sm text-[#66735F]">
+          <strong className="text-[#20291D]">{mappedTotal}</strong> of {productTotal} product
+          {productTotal === 1 ? "" : "s"} sit in this tree
+          {unmapped > 0 ? (
+            <>
+              {" — "}
+              <span className="font-semibold text-amber-700">{unmapped} unmapped</span>
+            </>
+          ) : null}
+        </p>
+        {distribution.length === 0 ? (
+          <p className="mt-1 text-xs text-[#8E9A84]">No products in the tree yet.</p>
+        ) : (
+          <div className="mt-2 space-y-1.5">
+            {distribution.map(({ top, n }) => (
+              <div key={top.id} className="flex items-center gap-2 text-xs">
+                <span className="w-36 shrink-0 truncate text-right font-semibold text-[#20291D]">
+                  {top.emoji ?? "🌱"} {enOf(top)}
+                </span>
+                <div className="h-2.5 flex-1 rounded-full bg-[#EDF2E6]">
+                  <div className="h-2.5 rounded-full bg-[#2F6B3F]" style={{ width: `${Math.max(6, Math.round((n / maxDist) * 100))}%` }} />
+                </div>
+                <span className="w-8 shrink-0 text-right font-bold text-[#20291D]">{n}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 

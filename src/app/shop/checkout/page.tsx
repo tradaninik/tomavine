@@ -9,6 +9,7 @@ import { useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 import { clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
+import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 const STORE_KEY = "tv_orders_last";
@@ -416,7 +417,9 @@ export default function CheckoutPage() {
                   inputMode="numeric"
                   pattern="[1-9][0-9]{5}"
                   autoComplete="postal-code"
+                  list={LOCATION_LIST_ID}
                 />
+                <LocationDatalist />
               </Field>
             </div>
           </Card>

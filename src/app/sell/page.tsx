@@ -6,6 +6,7 @@ import type { FormEvent } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { LangPill, LangProvider, useLang } from "@/lib/i18n";
 import { Btn, Card, ErrBox, Field, Loading, Pill, inputCls } from "@/app/shop/ui";
+import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 const display = Fraunces({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-display" });
 const body = Karla({ subsets: ["latin"], variable: "--font-body" });
@@ -355,8 +356,10 @@ function ApplyForm({ user, onApplied, onConflict }: { user: ApplyUser; onApplied
             value={pin}
             inputMode="numeric"
             maxLength={6}
+            list={LOCATION_LIST_ID}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
           />
+          <LocationDatalist />
         </Field>
 
         <Field label={t("gstin_label")}>

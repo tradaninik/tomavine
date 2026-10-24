@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Loading, Pill, inputCls } from "../ui";
@@ -115,9 +117,14 @@ function MetaChips({ meta }: { meta: Record<string, unknown> | null }) {
 }
 
 export default function AdminTaxonomyPage() {
+  // Deep-link support: the categories console's insights chips send
+  // /admin/taxonomy?kind=soil (etc.) — read once into the initial
+  // tab state (validated against the fetched kinds inside .then,
+  // falling back to the first kind).
+  const sp = useSearchParams();
   const [terms, setTerms] = useState<Term[]>([]);
   const [kinds, setKinds] = useState<KindMeta[]>([]);
-  const [kind, setKind] = useState("");
+  const [kind, setKind] = useState(() => sp.get("kind") ?? "");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -146,7 +153,12 @@ export default function AdminTaxonomyPage() {
           setTerms(data.terms);
           setKinds(data.kinds);
           if (data.kinds.length > 0) {
-            setKind((prev) => (prev === "" ? data.kinds[0].code : prev));
+            setKind((prev) => {
+              if (prev !== "" && data.kinds.some((k: KindMeta) => k.code === prev)) {
+                return prev;
+              }
+              return data.kinds[0].code;
+            });
           }
         }
       })
@@ -323,9 +335,17 @@ export default function AdminTaxonomyPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold text-[#1C3A2A]" style={SERIF}>
-          Taxonomy
-        </h1>
+        <div>
+          <h1 className="text-3xl font-semibold text-[#1C3A2A]" style={SERIF}>
+            Taxonomy
+          </h1>
+          <p className="mt-1 text-xs text-[#66735F]">
+            <Link href="/admin/categories" className="font-semibold text-[#2F6B3F] hover:underline">
+              🗂 Category-tree console →
+            </Link>{" "}
+            — the browse tree this catalog feeds; its insights panel links back here per type.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {okMsg ? <Pill tone="leaf">✓ {okMsg}</Pill> : null}
           {inactiveCount > 0 ? <Pill tone="amber">{inactiveCount} inactive</Pill> : null}

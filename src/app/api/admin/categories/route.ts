@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireAdminScope } from "@/lib/permissions";
+import { TAXONOMY_KINDS, KIND_META } from "@/lib/taxonomy";
 
 // ─────────────────────────────────────────────────────────────
 // Admin category-tree console — collection API (mission X).
@@ -17,6 +18,9 @@ import { requireAdminScope } from "@/lib/permissions";
 //        counts   → { categoryId: productCount } for attached
 //                   products (the backfill mapped all 12)
 //        unmapped → products still carrying categoryId null
+//        taxonomy → per-kind term totals (active/total) so the
+//                   console's insights block can cross-link the
+//                   attribute types without a second roundtrip
 //
 // POST → create a top or a sub. Rules:
 //        • names.en is required identity for display; regional
@@ -73,7 +77,7 @@ export async function GET() {
   if (!gate.ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const [categories, grouped, unmapped] = await Promise.all([
+  const [categories, grouped, unmapped, kindRows] = await Promise.all([
     db.category.findMany({ orderBy: [{ sortOrder: "asc" }, { slug: "asc" }] }),
     db.product.groupBy({
       by: ["categoryId"],
@@ -81,6 +85,7 @@ export async function GET() {
       _count: { _all: true },
     }),
     db.product.count({ where: { categoryId: null } }),
+    db.taxonomyTerm.groupBy({ by: ["kind", "active"], _count: { _all: true } }),
   ]);
   const counts: Record<string, number> = {};
   for (const g of grouped) {
@@ -88,7 +93,13 @@ export async function GET() {
       counts[g.categoryId] = g._count._all;
     }
   }
-  return NextResponse.json({ categories, counts, unmapped });
+  const taxonomy = TAXONOMY_KINDS.map((code) => {
+    const rows = kindRows.filter((r) => r.kind === code);
+    const total = rows.reduce((sum, r) => sum + r._count._all, 0);
+    const active = rows.filter((r) => r.active).reduce((sum, r) => sum + r._count._all, 0);
+    return { code, label: KIND_META[code].label, emoji: KIND_META[code].emoji, total, active };
+  });
+  return NextResponse.json({ categories, counts, unmapped, taxonomy });
 }
 
 export async function POST(req: Request) {

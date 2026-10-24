@@ -21,6 +21,7 @@ const BASE_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/nurseries", label: "Nurseries" },
       { href: "/admin/orders", label: "Orders" },
+      { href: "/admin/locations", label: "Locations" },
     ],
   },
   {
@@ -57,6 +58,7 @@ function groupsForRole(role: string, permissions: string[] | null): NavGroup[] {
       if (l.href === "/admin/taxonomy") return allowed.has("taxonomy");
       if (l.href === "/admin/categories") return allowed.has("taxonomy");
       if (l.href === "/admin/orders") return allowed.has("orders");
+      if (l.href === "/admin/locations") return allowed.has("locations");
       if (l.href === "/admin/audit") return allowed.has("audit");
       return true;
     });
@@ -302,7 +304,7 @@ export function AdminNav() {
           {groups.map((group) => (
             <div key={group.title ?? "top"} className="flex gap-1 lg:block">
               {group.title ? (
-                <p className="hidden px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-[#F7F3E8]/40 lg:block">
+                <p className="mr-1 hidden shrink-0 self-center whitespace-nowrap px-1 text-[10px] font-bold uppercase tracking-widest text-[#F7F3E8]/40 sm:block lg:mt-2 lg:self-auto lg:px-3 lg:pb-1 lg:pt-2">
                   {group.title}
                 </p>
               ) : null}

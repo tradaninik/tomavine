@@ -29,7 +29,7 @@ import { getSession } from "@/lib/security";
 // someone's access must take effect immediately, not at next login.
 // ─────────────────────────────────────────────────────────────
 
-export const ADMIN_SCOPES = ["nurseries", "orders", "audit", "taxonomy", "accounting"] as const;
+export const ADMIN_SCOPES = ["nurseries", "orders", "audit", "taxonomy", "locations", "accounting"] as const;
 
 export type AdminScope = (typeof ADMIN_SCOPES)[number];
 
@@ -37,7 +37,8 @@ export const SCOPE_META: Record<AdminScope, { label: string; hint: string }> = {
   nurseries: { label: "Nurseries", hint: "Verification queue and nursery records" },
   orders: { label: "Orders", hint: "Order oversight" },
   audit: { label: "Audit log", hint: "Audit trail feed" },
-  taxonomy: { label: "Taxonomy", hint: "Catalog terms console" },
+  taxonomy: { label: "Taxonomy", hint: "Catalog terms and the category tree" },
+  locations: { label: "Locations", hint: "Serviceable-pincode list for the storefront dropdowns" },
   accounting: { label: "Accounting", hint: "Reserved — no surface yet" },
 };
 

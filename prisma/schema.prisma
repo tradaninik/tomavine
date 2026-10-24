@@ -375,3 +375,22 @@ model TaxonomyTerm {
   @@unique([kind, label])
   @@index([kind, active, sort])
 }
+
+// Serviceable-pincode list (mission X2). The owner curates the
+// pincodes Tomavine actively serves; every active row appears as a
+// dropdown suggestion on the storefront pincode inputs (nurseries
+// search, checkout address, sell application). pincode is the
+// identity — unique, and editable only through the admin console.
+// Nothing on the storefront is BLOCKED by absence: an unlisted
+// pincode still works, it just gets no dropdown suggestion.
+model ServiceLocation {
+  id        String   @id @default(cuid())
+  pincode   String   @unique
+  city      String
+  state     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}

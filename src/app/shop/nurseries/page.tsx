@@ -7,6 +7,7 @@ import { Btn, Empty, ErrBox, Loading, Pill, SectionTitle, StarRow, inputCls } fr
 import { useLang } from "@/lib/i18n";
 import { districtName } from "@/lib/geo";
 import { DistrictPicker, useGeo } from "../location";
+import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 type Verdict = { delivers: boolean; label: string };
 
@@ -130,10 +131,12 @@ export default function NurseriesPage() {
           onChange={(e) => setPin(e.target.value)}
           inputMode="numeric"
           maxLength={6}
+          list={LOCATION_LIST_ID}
           placeholder={t("pincode")}
           aria-label={t("pincode")}
           className={`${inputCls} w-44`}
         />
+        <LocationDatalist />
         <Btn type="submit">→</Btn>
         {applied ? (
           <Btn
