@@ -30,3 +30,14 @@ use licenses that do not require attribution. Per-photo provenance (exact
 source page and author) was not recorded at the time; if any photo's origin
 needs to be verified later, it should be re-sourced from a verifiable
 library rather than traced.
+
+## App icons (public/icons/ + src/app/favicon.ico)
+
+The app icons — icon-192.png, icon-512.png, maskable-512.png,
+apple-touch-icon.png and the favicon.ico replacing the create-next-app
+default — are original artwork created for Tomavine in October 2026: a
+stylised two-leaf sprout in cream (#F7F3E8) on the brand forest green
+(#1C3A2A), matching the header wordmark identity. They are drawn purely
+programmatically by scripts/make-icons.py (Pillow geometry, no external
+assets, no fonts, no third-party material in any form). No license
+restrictions apply beyond the repository's own terms.

@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/security";
 import Nav from "./nav";
 
+export const metadata = {
+  title: "Seller workspace",
+  description: "Manage your nursery's products, orders, leads and reviews.",
+};
+
 export default async function SellerLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
 

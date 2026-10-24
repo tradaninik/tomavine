@@ -8,8 +8,9 @@ import { isAdminRole } from "@/lib/permissions";
 const display = Fraunces({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-display" });
 const body = Karla({ subsets: ["latin"], variable: "--font-body" });
 
+// absolute: avoids the root layout's "%s — Tomavine" template suffix.
 export const metadata = {
-  title: "Tomavine Admin",
+  title: { absolute: "Tomavine Admin" },
   description: "Nursery verification, orders oversight and audit log.",
 };
 

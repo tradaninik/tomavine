@@ -62,6 +62,15 @@ export default function NurseryPage() {
     };
   }, [slug, reload]);
 
+  // Dynamic tab title: client-rendered page, server metadata is static.
+  useEffect(() => {
+    const fallback = "Tomavine — plants, saplings & garden care";
+    document.title = nursery ? `${nursery.name} — Tomavine` : fallback;
+    return () => {
+      document.title = fallback;
+    };
+  }, [nursery]);
+
   if (loading) {
     return <Loading />;
   }

@@ -593,7 +593,10 @@ export function Nav() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur">
+    <header
+      className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#1C3A2A] text-lg" aria-hidden="true">
@@ -742,7 +745,10 @@ export function Nav() {
 
 export function Footer() {
   return (
-    <footer className="mt-16 bg-[#1C3A2A] px-4 py-8 text-center text-sm text-[#F7F3E8]/60">
+    <footer
+      className="mt-16 bg-[#1C3A2A] px-4 pt-8 text-center text-sm text-[#F7F3E8]/60"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 2rem)" }}
+    >
       <p className="text-base font-semibold text-[#F7F3E8]" style={SERIF}>
         🌱 Tomavine
       </p>

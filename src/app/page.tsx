@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { LangPill, LangProvider, useLang } from "@/lib/i18n";
 import { Btn, ProductTile, StarRow, ToastHost } from "@/app/shop/ui";
+import { InstallBanner } from "@/app/shop/pwa";
 import { LocationChip } from "@/app/shop/location";
 import { CART_EVENT, cartCount, loadCart } from "@/lib/cart";
 import type { ProductCard } from "@/lib/catalog";
@@ -138,7 +139,10 @@ function Landing() {
 
   return (
     <div className="min-h-screen bg-[#F7F3E8]" style={{ fontFamily: "var(--font-body), system-ui, sans-serif" }}>
-      <header className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur">
+      <header
+        className="sticky top-0 z-40 border-b border-[#E4E0CE] bg-[#F7F3E8]/95 backdrop-blur"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#1C3A2A] text-lg" aria-hidden="true">
@@ -383,13 +387,17 @@ function Landing() {
         </section>
       </main>
 
-      <footer className="mt-10 bg-[#1C3A2A] px-4 py-10 text-center text-sm text-[#F7F3E8]/60">
+      <footer
+        className="mt-10 bg-[#1C3A2A] px-4 pt-10 text-center text-sm text-[#F7F3E8]/60"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 2.5rem)" }}
+      >
         <p className="text-base font-semibold text-[#F7F3E8]" style={SERIF}>
           🌱 Tomavine
         </p>
         <p className="mt-1">Where growers meet gardens</p>
         <p className="mt-1 text-xs">Cash on delivery · From physically verified nurseries</p>
       </footer>
+      <InstallBanner />
       <ToastHost />
     </div>
   );

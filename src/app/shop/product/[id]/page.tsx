@@ -138,6 +138,16 @@ export default function ProductPage() {
     };
   }, [id, reload]);
 
+  // Dynamic tab title: this is a client-rendered page, so server metadata
+  // cannot carry the product name — reflect it once the product loads.
+  useEffect(() => {
+    const fallback = "Tomavine — plants, saplings & garden care";
+    document.title = product ? `${displayName(product.names, lang, product.nameEn)} — Tomavine` : fallback;
+    return () => {
+      document.title = fallback;
+    };
+  }, [product, lang]);
+
   useEffect(() => {
     let active = true;
     fetch("/api/auth/me")
