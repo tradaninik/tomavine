@@ -5,7 +5,8 @@
 // Pricing here mirrors src/app/api/orders/route.ts EXACTLY:
 //   - unit = selected variant price, else priceMin
 //   - active rescue listing -> Math.round(unit * (1 - pct / 100))
-//   - GST 18% for pots/soil/seeds/tools/saplings, 5% otherwise
+//   - GST 18% for pots/soil/seeds/tools, 5% otherwise (plants & saplings
+//     are live plants, HSN 0601 -> 5%)
 //   - delivery per nursery group: ₹0 on PICKUP, ₹0 at ₹499+, else ₹49
 //   - ₹25 COD fee per order (per nursery group)
 // Rule: only call loadCart()/saveCart() inside useEffect or event
@@ -84,7 +85,9 @@ export const CART_KEY = "tomavine_cart_v1";
 export const CART_EVENT = "tomavine:cart";
 export const MAX_LINES = 20;
 export const MAX_QTY = 50;
-export const SUPPLY_CATEGORIES = ["pots", "soil", "seeds", "tools", "saplings"];
+// Supply goods attract 18% GST; everything else (plants, saplings,
+// inputs) is 5%. Saplings are live plants, HSN 0601 -> 5%.
+export const SUPPLY_CATEGORIES = ["pots", "soil", "seeds", "tools"];
 export const FREE_DELIVERY_AT = 499;
 export const DELIVERY_FEE = 49;
 export const COD_FEE = 25;

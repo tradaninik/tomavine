@@ -5,7 +5,9 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 import { notifySellerNewOrder } from "@/lib/notify";
 
-const SUPPLY = ["pots", "soil", "seeds", "tools", "saplings"];
+// Supply goods attract 18% GST; everything else (plants, saplings,
+// inputs) is 5%. Saplings are live plants, HSN 0601 -> 5%.
+const SUPPLY = ["pots", "soil", "seeds", "tools"];
 const Addr = z.object({ name: z.string().min(2), phone: z.string().regex(/^\+91[6-9]\d{9}$/),
   house: z.string().min(1), street: z.string().optional(), city: z.string().min(2),
   pincode: z.string().regex(/^[1-9]\d{5}$/) });
