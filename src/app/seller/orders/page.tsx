@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr, paymentLabel, statusLabel, statusTone } from "../ui";
 import { todayIST, plusDaysIST, readTrustMeta, formatPromisedDay } from "@/lib/trust";
@@ -10,6 +11,14 @@ type Item = {
   vlabel: string | null;
   qty: number;
   unitPrice: number;
+};
+
+type EventRow = {
+  id: string;
+  status: string;
+  note: string | null;
+  actorRole: string;
+  createdAt: string;
 };
 
 type Order = {
@@ -24,6 +33,8 @@ type Order = {
   deliveryOtp: string | null;
   createdAt: string;
   meta: unknown;
+  // ── ADDED (power pack): OrderEvent rows for the per-order timeline.
+  events: EventRow[];
   // ── ADDED: tolerant address shape (seed orders use line1,
   // checkout orders use house/street) ──
   address: {
@@ -40,6 +51,19 @@ type Order = {
   user: { name: string | null; phone: string };
 };
 
+// Terminal rows can never transition again — no checkbox, no ladder.
+const TERMINAL = new Set(["DELIVERED", "CANCELLED", "REJECTED"]);
+
+// One status applied to the ticked orders via the bulk PATCH.
+const BULK_OPTIONS = [
+  { value: "CONFIRMED", label: "Confirmed" },
+  { value: "PREPARING", label: "Being prepared" },
+  { value: "OUT_FOR_DELIVERY", label: "Out for delivery" },
+  { value: "DELIVERED", label: "Delivered" },
+  { value: "CANCELLED", label: "Cancelled" },
+  { value: "REJECTED", label: "Rejected" },
+];
+
 function tabButton(active: boolean) {
   return active
     ? "rounded-lg bg-[#2F6B3F] px-4 py-1.5 text-sm font-semibold text-white"
@@ -52,6 +76,16 @@ function datePill(active: boolean) {
     : "rounded-full border border-[#1C3A2A]/20 px-3 py-1 text-xs font-semibold text-[#1C3A2A]/70 hover:bg-[#F7F3E8]";
 }
 
+function slipLinkCls() {
+  return "rounded-xl border border-[#2F6B3F] px-4 py-2 text-sm font-semibold text-[#2F6B3F] transition hover:bg-[#2F6B3F]/10";
+}
+
+// CSV quoting (RFC 4180): wrap in quotes when a comma, quote, or
+// newline appears; double embedded quotes.
+function csvCell(value: string): string {
+  return /[",\n\r;]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
+}
+
 export default function SellerOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState<"active" | "all">("active");
@@ -59,6 +93,13 @@ export default function SellerOrdersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [datePick, setDatePick] = useState<Record<string, string>>({});
+
+  // ── ADDED (power pack): bulk selection + status, CSV, timeline.
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("CONFIRMED");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [openEvents, setOpenEvents] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,9 +123,148 @@ export default function SellerOrdersPage() {
     load();
   }, [load]);
 
+  // Switching tabs swaps the list — start the selection over.
+  // (In the click handler, not an effect, to keep renders flat.)
+  function switchTab(next: "active" | "all") {
+    if (next === tab) {
+      return;
+    }
+    setSelected([]);
+    setBulkMsg("");
+    setOpenEvents({});
+    setTab(next);
+  }
+
+  const selectable = orders.filter((o) => !TERMINAL.has(o.status));
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function isCod(o: Order): boolean {
+    if (o.payment?.method === "cod") {
+      return true;
+    }
+    if (o.meta !== null && typeof o.meta === "object" && !Array.isArray(o.meta)) {
+      return (o.meta as Record<string, unknown>).cod === true;
+    }
+    return false;
+  }
+
+  // Export the currently loaded (filtered) list as CSV. Amounts are
+  // raw integers exactly as stored in the DB — rupees, not paise
+  // (checkout prices are rupee Ints; Razorpay multiplies by 100).
+  function exportCsv() {
+    if (orders.length === 0) {
+      return;
+    }
+
+    const header = [
+      "code",
+      "created_at",
+      "status",
+      "mode",
+      "customer_phone",
+      "items",
+      "subtotal_inr",
+      "delivery_fee_inr",
+      "tax_inr",
+      "total_inr",
+      "cod",
+    ];
+    const lines = [header.join(",")];
+
+    for (const o of orders) {
+      const items = o.items
+        .map((it) => `${it.nameSnap}${it.vlabel ? ` (${it.vlabel})` : ""} x${it.qty}`)
+        .join("; ");
+
+      lines.push(
+        [
+          o.code,
+          o.createdAt, // already an ISO string from the JSON API
+          o.status,
+          o.mode,
+          o.user.phone,
+          items,
+          String(o.subtotal),
+          String(o.deliveryFee),
+          String(o.tax),
+          String(o.total),
+          isCod(o) ? "yes" : "no",
+        ]
+          .map(csvCell)
+          .join(","),
+      );
+    }
+
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tomavine-orders-${todayIST()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function applyBulk() {
+    if (selected.length === 0 || bulkBusy) {
+      return;
+    }
+
+    const label = BULK_OPTIONS.find((b) => b.value === bulkStatus)?.label ?? bulkStatus;
+    const sure = window.confirm(
+      `Set ${selected.length} selected order(s) to "${label}"?\nEach buyer will be notified on WhatsApp. Orders that are not on the right step of the ladder will be skipped.`,
+    );
+
+    if (!sure) return;
+
+    setBulkBusy(true);
+    setBulkMsg("");
+
+    try {
+      const res = await fetch("/api/seller/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selected, status: bulkStatus }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Bulk update failed");
+      }
+
+      const results = (data.results ?? []) as { id: string; code: string; ok: boolean; error?: string }[];
+      const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
+      const fails = results.filter((r) => !r.ok);
+
+      // Keep the refused rows ticked so the seller can see what failed.
+      setSelected((prev) => prev.filter((id) => !okIds.has(id)));
+      setBulkMsg(
+        `${data.updated} of ${results.length} updated` +
+          (fails.length > 0 ? ` — failed: ${fails.map((f) => `${f.code} (${f.error})`).join("; ")}` : ""),
+      );
+
+      await load();
+    } catch (e) {
+      setBulkMsg(e instanceof Error ? e.message : "Bulk update failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function act(id: string, action: string, promisedDate?: string) {
     if (action === "reject") {
       const sure = window.confirm("Reject this order? The buyer will be notified.");
+
+      if (!sure) return;
+    }
+
+    if (action === "cancel") {
+      const sure = window.confirm("Cancel this order? The buyer will be notified and stock will be returned.");
 
       if (!sure) return;
     }
@@ -127,13 +307,18 @@ export default function SellerOrdersPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-[#1C3A2A]">Orders</h1>
-        <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm">
-          <button className={tabButton(tab === "active")} onClick={() => setTab("active")}>
-            Active
-          </button>
-          <button className={tabButton(tab === "all")} onClick={() => setTab("all")}>
-            All
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn kind="ghost" onClick={exportCsv} disabled={orders.length === 0}>
+            Export CSV
+          </Btn>
+          <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm">
+            <button className={tabButton(tab === "active")} onClick={() => switchTab("active")}>
+              Active
+            </button>
+            <button className={tabButton(tab === "all")} onClick={() => switchTab("all")}>
+              All
+            </button>
+          </div>
         </div>
       </div>
 
@@ -141,19 +326,78 @@ export default function SellerOrdersPage() {
 
       {orders.length === 0 ? <p className="text-[#1C3A2A]/60">No orders in this view.</p> : null}
 
+      {/* ── ADDED (power pack): bulk status bar. Tick rows below, pick
+          one status, apply — each order is ladder-checked server-side
+          and buyers get a WhatsApp update per row that moves. */}
+      {orders.length > 0 ? (
+        <Card>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-[#1C3A2A]">Bulk update</span>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value)}
+              className="rounded-lg border border-[#1C3A2A]/20 bg-white px-2 py-1.5 text-sm text-[#1C3A2A]"
+            >
+              {BULK_OPTIONS.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <Btn onClick={applyBulk} disabled={bulkBusy || selected.length === 0}>
+              {bulkBusy ? "Applying…" : `Apply to ${selected.length} selected`}
+            </Btn>
+            {selectable.length > 0 ? (
+              <Btn
+                kind="ghost"
+                onClick={() => setSelected(selectable.map((o) => o.id))}
+                disabled={bulkBusy || selected.length === selectable.length}
+              >
+                Select all ({selectable.length})
+              </Btn>
+            ) : null}
+            {selected.length > 0 ? (
+              <Btn kind="ghost" onClick={() => setSelected([])} disabled={bulkBusy}>
+                Clear
+              </Btn>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs text-[#1C3A2A]/50">
+            Tick orders to pick them. Only valid rungs of the ladder
+            PENDING → Confirmed → Preparing → Out for delivery → Delivered are applied; cancel/reject work
+            while an order is still pending or confirmed.
+          </p>
+          {bulkMsg ? (
+            <p className="mt-2 rounded-lg bg-[#F7F3E8] px-3 py-2 text-xs font-semibold text-[#1C3A2A]">{bulkMsg}</p>
+          ) : null}
+        </Card>
+      ) : null}
+
       {orders.map((o) => {
         const busy = busyId === o.id;
         const trust = readTrustMeta(o.meta);
         const sel = datePick[o.id] ?? plusDaysIST(1);
+        const selectableRow = !TERMINAL.has(o.status);
 
         return (
           <Card key={o.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-bold text-[#1C3A2A]">{o.code}</p>
-                <p className="text-xs text-[#1C3A2A]/60">
-                  {new Date(o.createdAt).toLocaleString("en-IN")} · {o.user.name ?? o.user.phone}
-                </p>
+              <div className="flex items-center gap-3">
+                {selectableRow ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(o.id)}
+                    onChange={() => toggle(o.id)}
+                    aria-label={`Select order ${o.code} for bulk update`}
+                    className="h-4 w-4 accent-[#2F6B3F]"
+                  />
+                ) : null}
+                <div>
+                  <p className="font-bold text-[#1C3A2A]">{o.code}</p>
+                  <p className="text-xs text-[#1C3A2A]/60">
+                    {new Date(o.createdAt).toLocaleString("en-IN")} · {o.user.name ?? o.user.phone}
+                  </p>
+                </div>
               </div>
               <Pill tone={statusTone(o.status)}>{statusLabel(o.status)}</Pill>
             </div>
@@ -250,6 +494,17 @@ export default function SellerOrdersPage() {
                 </>
               ) : null}
 
+              {o.status === "CONFIRMED" ? (
+                <>
+                  <Btn onClick={() => act(o.id, "prepare")} disabled={busy}>
+                    Mark preparing
+                  </Btn>
+                  <Btn kind="danger" onClick={() => act(o.id, "cancel")} disabled={busy}>
+                    Cancel
+                  </Btn>
+                </>
+              ) : null}
+
               {o.status === "CONFIRMED" || o.status === "PREPARING" ? (
                 <Btn onClick={() => act(o.id, "out")} disabled={busy}>
                   Mark out for delivery
@@ -261,7 +516,37 @@ export default function SellerOrdersPage() {
                   Mark delivered
                 </Btn>
               ) : null}
+
+              {/* ── ADDED (power pack): print packing slip + timeline. */}
+              <Link href={`/seller/orders/${o.id}/slip`} target="_blank" rel="noopener" className={slipLinkCls()}>
+                Slip
+              </Link>
+              <Btn kind="ghost" onClick={() => setOpenEvents((p) => ({ ...p, [o.id]: !p[o.id] }))}>
+                {openEvents[o.id] ? "Hide timeline" : "Timeline"}
+              </Btn>
             </div>
+
+            {openEvents[o.id] ? (
+              <div className="mt-4 rounded-xl border border-[#1C3A2A]/10 bg-[#F7F3E8]/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/50">Order timeline</p>
+                <div className="mt-3 space-y-3">
+                  {(o.events ?? []).length === 0 ? (
+                    <p className="text-sm text-[#1C3A2A]/50">No events recorded yet.</p>
+                  ) : (
+                    [...o.events].reverse().map((ev) => (
+                      <div key={ev.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Pill tone={statusTone(ev.status)}>{statusLabel(ev.status)}</Pill>
+                        <span className="text-xs text-[#1C3A2A]/60">{new Date(ev.createdAt).toLocaleString("en-IN")}</span>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/40">
+                          {ev.actorRole.toLowerCase()}
+                        </span>
+                        {ev.note ? <span className="basis-full text-xs text-[#1C3A2A]/60">{ev.note}</span> : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
           </Card>
         );
       })}
