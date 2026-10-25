@@ -1,12 +1,20 @@
 "use client";
 
+import { LEGACY_SUPPLY_CATEGORIES, legacyTaxRateFor, resolveRate } from "@/lib/category-gst";
+
 // ─────────────────────────────────────────────────────────────
 // Tomavine customer cart (storefront).
 // Pricing here mirrors src/app/api/orders/route.ts EXACTLY:
 //   - unit = selected variant price, else priceMin
 //   - active rescue listing -> Math.round(unit * (1 - pct / 100))
-//   - GST 18% for pots/soil/seeds/tools, 5% otherwise (plants & saplings
-//     are live plants, HSN 0601 -> 5%)
+//   - GST resolves from the Category tree (lib/category-gst.ts):
+//     the server puts the resolved whole percent on ProductCard.gstRate
+//     (node rate, else parent top's, 5 floor when mapped — the same
+//     rule Mission F charges in api/orders); unmapped products keep
+//     the LEGACY string rule (18% pots/soil/seeds/tools, 5% otherwise
+//     — plants & saplings are live plants, HSN 0601 -> 5%). The
+//     legacy rule stays the fallback so display can never disagree
+//     with the charge.
 //   - delivery per nursery group: ₹0 on PICKUP, ₹0 at ₹499+, else ₹49
 //   - ₹25 COD fee per order (per nursery group)
 // Rule: only call loadCart()/saveCart() inside useEffect or event
@@ -40,6 +48,9 @@ export type CartProduct = {
   nurseryCity: string;
   variants: CartVariant[];
   rescue: { pct: number; expiresAt: string } | null;
+  // GST whole percent resolved server-side from the Category tree
+  // (null = unmapped → legacy string fallback). See lib/category-gst.ts.
+  gstRate?: number | null;
 };
 
 export type CartGroupLine = {
@@ -87,7 +98,9 @@ export const MAX_LINES = 20;
 export const MAX_QTY = 50;
 // Supply goods attract 18% GST; everything else (plants, saplings,
 // inputs) is 5%. Saplings are live plants, HSN 0601 -> 5%.
-export const SUPPLY_CATEGORIES = ["pots", "soil", "seeds", "tools"];
+// Retained for backwards compatibility; the canonical copy lives in
+// lib/category-gst.ts (LEGACY_SUPPLY_CATEGORIES) — keep them in sync.
+export const SUPPLY_CATEGORIES = LEGACY_SUPPLY_CATEGORIES;
 export const FREE_DELIVERY_AT = 499;
 export const DELIVERY_FEE = 49;
 export const COD_FEE = 25;
@@ -186,8 +199,11 @@ export function rescueActive(product: CartProduct): boolean {
   return new Date(product.rescue.expiresAt).getTime() > Date.now();
 }
 
+// LEGACY string rule (for callers that only have the category
+// string). Cart/checkout tax now goes through resolveRate() so a
+// Category-tree rate wins when the product carries one.
 export function taxRateFor(category: string): number {
-  return SUPPLY_CATEGORIES.includes(category) ? 0.18 : 0.05;
+  return legacyTaxRateFor(category);
 }
 
 export function variantOf(product: CartProduct, variantId: string | null): CartVariant | null {
@@ -251,7 +267,7 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
     const variant = variantOf(product, line.variantId);
     const unit = unitPriceOf(product, line.variantId);
     const lineSub = unit * line.qty;
-    const lineTax = Math.round(lineSub * taxRateFor(product.category));
+    const lineTax = Math.round(lineSub * resolveRate(product));
     let group = groups.get(product.nurseryId);
     if (!group) {
       group = {

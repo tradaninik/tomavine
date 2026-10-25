@@ -40,6 +40,20 @@ export function catEmoji(category: string): string {
       return "🏺";
     case "tools":
       return "🛠️";
+    // New tree tops (2c) — same emojis as scripts/seed-categories.mjs
+    // so fallback thumbs keep their identity.
+    case "seeds":
+      return "🌱";
+    case "plant-protection":
+      return "🐛";
+    case "landscaping":
+      return "🌳";
+    case "decor":
+      return "🪨";
+    case "irrigation":
+      return "💧";
+    case "gifts":
+      return "🎁";
     default:
       return "🌱";
   }
@@ -525,11 +539,11 @@ type NavUser = {
 };
 
 const NAV_LINKS = [
-  { href: "/shop/category/plants", key: "plants", accent: false },
-  { href: "/shop/category/saplings", key: "saplings", accent: false },
-  { href: "/shop/category/inputs", key: "inputs", accent: false },
-  { href: "/shop/category/pots", key: "pots", accent: false },
-  { href: "/shop/category/tools", key: "tools", accent: false },
+  { href: "/shop/c/plants", key: "plants", accent: false },
+  { href: "/shop/c/saplings", key: "saplings", accent: false },
+  { href: "/shop/c/inputs", key: "inputs", accent: false },
+  { href: "/shop/c/pots", key: "pots", accent: false },
+  { href: "/shop/c/tools", key: "tools", accent: false },
   { href: "/shop/nurseries", key: "nurseries", accent: false },
   { href: "/shop/advisor", key: "advisor", accent: false },
   { href: "/shop/rescue", key: "rescue", accent: true },

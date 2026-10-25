@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { Btn, Card, Pill, inr } from "../ui";
 import { displayPriceOf } from "@/lib/cart";
 import { subOptionsFor, subLabel } from "@/lib/subcategories";
+import type { CategoryNode, CategoryTop, CategoryTree } from "@/lib/category-tree";
 
 type Variant = {
   id: string;
@@ -98,6 +99,11 @@ const ALL_CATS: { v: string; label: string; plain: string }[] = [
 ];
 
 const CARE_CATS = ["plants", "saplings"];
+
+// English display name for a tree node (label = emoji + this).
+function enOf(node: { names: Record<string, string> | null; slug: string }): string {
+  return node.names && typeof node.names.en === "string" && node.names.en.length > 0 ? node.names.en : node.slug;
+}
 
 function trayLabel(traySize: string): string {
   const m = /(\d+)/.exec(traySize);
@@ -203,6 +209,10 @@ export default function SellerProductsPage() {
   const [canManage, setCanManage] = useState({ products: true, rescue: true });
   const [photoBusyId, setPhotoBusyId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
+  // Category tree (2c) — powers the grouped tree picker in the New
+  // product form; falls back to the legacy 5-category select.
+  const [catTree, setCatTree] = useState<CategoryTree | null>(null);
+  const [newCategoryId, setNewCategoryId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,6 +248,7 @@ export default function SellerProductsPage() {
   useEffect(() => {
     if (allowedCats !== null && allowedCats.length > 0 && !allowedCats.includes(newCat)) {
       setNewCat(allowedCats[0]);
+      setNewCategoryId("");
       setNewSub("");
       setNewVariety("");
       setNewPlantType("");
@@ -247,6 +258,24 @@ export default function SellerProductsPage() {
       setNewAgri(null);
     }
   }, [allowedCats, newCat]);
+
+  // Category tree (2c) — one fetch while the form is closed/open;
+  // optional: if it can't be fetched, the legacy selects stay.
+  useEffect(() => {
+    if (catTree !== null) {
+      return;
+    }
+    fetch("/api/catalog/categories")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.categories) && data.categories.length > 0) {
+          setCatTree(data.categories as CategoryTree);
+        }
+      })
+      .catch(() => {
+        // tree is optional help — the legacy category inputs remain
+      });
+  }, [catTree]);
 
   async function patch(id: string, payload: Record<string, unknown>) {
     setBusyId(id);
@@ -354,6 +383,60 @@ export default function SellerProductsPage() {
 
   function changeCat(c: string) {
     setNewCat(c);
+    setNewSub("");
+    setNewVariety("");
+    setNewPlantType("");
+    setNewSize("");
+    setNewInputTerm("");
+    setInputNote("");
+    setNewNames({});
+    setNewAgri(null);
+    setNewCareSun("");
+    setNewCareSoil("");
+    setNewCareWater("");
+  }
+
+  // ── Tree picker (2c) ────────────────────────────────────────
+  // Visible when the tree loaded. The selection writes categoryId;
+  // newCat is kept in sync with the node's TOP (legacyKey for the
+  // 5 legacy tops, else the slug) so the helper sections below
+  // (variety, plant type, care…) keep working untouched. The
+  // legacy selects stay as the fallback.
+  const treePickerActive = catTree !== null && catTree.length > 0;
+  const treeTops =
+    catTree === null
+      ? []
+      : allowedCats === null
+        ? catTree
+        : catTree.filter(
+            (top) =>
+              allowedCats.includes(top.slug) ||
+              (top.legacyKey !== null && allowedCats.includes(top.legacyKey)),
+          );
+
+  function treeSelection(id: string): { top: CategoryTop; sub: CategoryNode | null } | null {
+    if (!catTree) {
+      return null;
+    }
+    for (const top of catTree) {
+      if (top.id === id) {
+        return { top: top, sub: null };
+      }
+      const sub = top.subs.find((s) => s.id === id);
+      if (sub) {
+        return { top: top, sub: sub };
+      }
+    }
+    return null;
+  }
+
+  function pickTreeCategory(id: string) {
+    setNewCategoryId(id);
+    const found = treeSelection(id);
+    const topKey = found ? (found.top.legacyKey ?? found.top.slug) : "";
+    // Same resets as the legacy changeCat() so no stale helper data
+    // follows the product across categories.
+    setNewCat(topKey);
     setNewSub("");
     setNewVariety("");
     setNewPlantType("");
@@ -477,6 +560,13 @@ export default function SellerProductsPage() {
     setCreateError("");
     setCreateOk("");
 
+    // Tree picker is the source of truth once loaded — a node must
+    // be picked so the server can write categoryId.
+    if (treePickerActive && !newCategoryId) {
+      setCreateError("Pick a category.");
+      return;
+    }
+
     const name = newName.trim();
     if (name.length < 2) {
       setCreateError("Product name must be at least 2 characters.");
@@ -535,6 +625,11 @@ export default function SellerProductsPage() {
       mrp: mrp,
       stock: stock,
     };
+    if (newCategoryId) {
+      // Tree picker selection (2c) — the server re-validates the
+      // node and keeps the legacy category string in sync.
+      payload.categoryId = newCategoryId;
+    }
     if (newSub) {
       payload.subCategory = newSub;
     }
@@ -614,25 +709,52 @@ export default function SellerProductsPage() {
           <p className="font-bold text-[#1C3A2A]">New product</p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium text-[#1C3A2A]">
-              Category
-              <select
-                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
-                value={newCat}
-                onChange={(e) => changeCat(e.target.value)}
-              >
-                {catOptions.map((c) => (
-                  <option key={c.v} value={c.v}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              {allowedCats !== null ? (
-                <span className="mt-1 block text-xs text-[#66735F]">
-                  Your nursery currently lists: {catOptions.map((c) => c.plain).join(", ")}.
-                </span>
-              ) : null}
-            </label>
+            {treePickerActive ? (
+              <label className="text-sm font-medium text-[#1C3A2A]">
+                Category
+                <select
+                  className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                  value={newCategoryId}
+                  onChange={(e) => pickTreeCategory(e.target.value)}
+                >
+                  <option value="">— pick a category —</option>
+                  {treeTops.map((top) => (
+                    <optgroup key={top.slug} label={`${top.emoji ?? "🌱"} ${enOf(top)}`}>
+                      {top.subs.map((s) => (
+                        <option key={s.slug} value={s.id}>
+                          {`${s.emoji ?? top.emoji ?? "🌱"} ${enOf(s)}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {allowedCats !== null ? (
+                  <span className="mt-1 block text-xs text-[#66735F]">
+                    Your nursery currently lists: {treeTops.map((top) => enOf(top)).join(", ")}.
+                  </span>
+                ) : null}
+              </label>
+            ) : (
+              <label className="text-sm font-medium text-[#1C3A2A]">
+                Category
+                <select
+                  className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                  value={newCat}
+                  onChange={(e) => changeCat(e.target.value)}
+                >
+                  {catOptions.map((c) => (
+                    <option key={c.v} value={c.v}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                {allowedCats !== null ? (
+                  <span className="mt-1 block text-xs text-[#66735F]">
+                    Your nursery currently lists: {catOptions.map((c) => c.plain).join(", ")}.
+                  </span>
+                ) : null}
+              </label>
+            )}
 
             <label className="text-sm font-medium text-[#1C3A2A]">
               Product name
@@ -646,23 +768,27 @@ export default function SellerProductsPage() {
             </label>
           </div>
 
-          <div className="mt-3 sm:max-w-md">
-            <label className="text-sm font-medium text-[#1C3A2A]">
-              Subcategory (optional — helps buyers browse)
-              <select
-                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
-                value={newSub}
-                onChange={(e) => setNewSub(e.target.value)}
-              >
-                <option value="">— none —</option>
-                {subOptionsFor(newCat).map((s) => (
-                  <option key={s.v} value={s.v}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          {/* With the tree picker the sub position lives in categoryId;
+              the legacy subCategory string select stays as fallback only. */}
+          {!treePickerActive ? (
+            <div className="mt-3 sm:max-w-md">
+              <label className="text-sm font-medium text-[#1C3A2A]">
+                Subcategory (optional — helps buyers browse)
+                <select
+                  className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                  value={newSub}
+                  onChange={(e) => setNewSub(e.target.value)}
+                >
+                  <option value="">— none —</option>
+                  {subOptionsFor(newCat).map((s) => (
+                    <option key={s.v} value={s.v}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
 
           {newCat === "saplings" ? (
             <div className="mt-3">

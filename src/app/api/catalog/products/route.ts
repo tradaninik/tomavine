@@ -3,9 +3,42 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { PUBLIC_PRODUCT_INCLUDE, productCard, publicProductWhere } from "@/lib/catalog";
 
+// `cat=<slug>` — a Category-tree slug (top OR sub). Resolved to
+// node ids server-side: a top matches its whole subtree (its own
+// products + every sub's), a sub matches just that sub. A legacy
+// string fallback keeps products with categoryId NULL (created
+// before/without the tree) on the right page via their legacy
+// top key (+ legacy subCategory on sub pages). Visibility rules
+// (publicProductWhere) are unchanged.
+async function applyCategorySlugFilter(where: Prisma.ProductWhereInput, catSlug: string): Promise<Prisma.ProductWhereInput | null> {
+  const node = await db.category.findUnique({
+    where: { slug: catSlug },
+    include: {
+      parent: { select: { id: true, legacyKey: true } },
+      children: { select: { id: true } },
+    },
+  });
+  if (!node || !node.active) {
+    return null;
+  }
+  const ids = node.parentId === null ? [node.id, ...node.children.map((c) => c.id)] : [node.id];
+  const topKey = node.parentId === null ? node.legacyKey : (node.parent?.legacyKey ?? null);
+  const or: Prisma.ProductWhereInput[] = [{ categoryId: { in: ids } }];
+  if (topKey) {
+    or.push({ categoryId: null, category: topKey });
+    if (node.parentId !== null) {
+      // Sub page: match the legacy presentation string too.
+      or.push({ categoryId: null, category: topKey, subCategory: node.slug });
+    }
+  }
+  where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: or }];
+  return where;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const category = url.searchParams.get("category");
+  const catSlug = url.searchParams.get("cat");
   const sub = url.searchParams.get("sub");
   const nurserySlug = url.searchParams.get("nursery");
   const rescueOnly = url.searchParams.get("rescue");
@@ -13,6 +46,13 @@ export async function GET(req: Request) {
   const idsParam = url.searchParams.get("ids");
 
   const where: Prisma.ProductWhereInput = publicProductWhere();
+
+  if (catSlug) {
+    const withCat = await applyCategorySlugFilter(where, catSlug);
+    if (withCat === null) {
+      return NextResponse.json({ products: [] });
+    }
+  }
 
   if (category) {
     where.category = category;

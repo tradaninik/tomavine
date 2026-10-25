@@ -191,7 +191,7 @@ export default function ProductPage() {
         emoji="🔍"
         title="Product not found"
         text="It may have been removed or hidden by the nursery."
-        action={<Btn href="/shop/category/plants">{t("browse")}</Btn>}
+        action={<Btn href="/shop/c/plants">{t("browse")}</Btn>}
       />
     );
   }

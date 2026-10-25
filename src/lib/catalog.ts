@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { rateFromNodeChain } from "@/lib/category-gst";
 
 // ─────────────────────────────────────────────────────────────
 // Shared server-side helpers for the public catalog APIs.
@@ -41,6 +42,11 @@ export type ProductCard = {
   rescue: { pct: number; expiresAt: string } | null;
   avgStars: number;
   reviewCount: number;
+  // Resolved GST whole percent from the category tree (node, else
+  // parent top, 5 floor when mapped — mirrors Mission F's server
+  // charge in api/orders; null = unmapped → the client falls back
+  // to the legacy string rule — see lib/category-gst.ts).
+  gstRate: number | null;
 };
 
 export const PUBLIC_PRODUCT_INCLUDE = {
@@ -48,6 +54,7 @@ export const PUBLIC_PRODUCT_INCLUDE = {
   rescue: { select: { pct: true, expiresAt: true } },
   nursery: { select: { id: true, name: true, slug: true, city: true, features: true } },
   reviews: { select: { stars: true } },
+  categoryNode: { select: { gstRate: true, parent: { select: { gstRate: true } } } },
 } satisfies Prisma.ProductInclude;
 
 export type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof PUBLIC_PRODUCT_INCLUDE }>;
@@ -92,5 +99,6 @@ export function productCard(p: ProductWithRelations): ProductCard {
     rescue: rescue,
     avgStars: avgStars,
     reviewCount: reviewCount,
+    gstRate: rateFromNodeChain(p.categoryNode),
   };
 }

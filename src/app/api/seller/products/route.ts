@@ -15,6 +15,46 @@ const PRODUCTS_OFF_MSG =
 const RESCUE_OFF_MSG =
   "Rescue deals are not enabled for your nursery — contact Tomavine support.";
 
+// Tree picker (2c): when `categoryId` is supplied it must point at
+// an ACTIVE category node (top or sub); the legacy category STRING
+// is then derived from the node's TOP — legacyKey when present (the
+// 5 legacy tops), else the top's slug (new tops like seeds) — so
+// old code paths (emoji, tax fallback, allow-lists) keep working.
+// The allow-list check accepts both forms; legacy keys equal their
+// slugs for the 5 legacy tops, so existing stored arrays are valid
+// without any data migration.
+type TreeTop = { id: string; slug: string; legacyKey: string | null; active: boolean };
+
+async function resolveTreeCategory(
+  categoryId: string,
+): Promise<{ ok: true; node: { id: string }; top: TreeTop; category: string } | { ok: false; error: string }> {
+  const node = await db.category.findUnique({
+    where: { id: categoryId },
+    include: {
+      parent: { select: { id: true, slug: true, legacyKey: true, active: true } },
+    },
+  });
+  if (!node || !node.active) {
+    return { ok: false, error: "Unknown category" };
+  }
+  if (node.parentId === null) {
+    const top: TreeTop = { id: node.id, slug: node.slug, legacyKey: node.legacyKey, active: node.active };
+    return { ok: true, node: { id: node.id }, top: top, category: node.legacyKey ?? node.slug };
+  }
+  if (!node.parent) {
+    return { ok: false, error: "Category is detached from its parent — contact Tomavine support" };
+  }
+  if (!node.parent.active) {
+    return { ok: false, error: "That category is currently unavailable" };
+  }
+  return {
+    ok: true,
+    node: { id: node.id },
+    top: node.parent,
+    category: node.parent.legacyKey ?? node.parent.slug,
+  };
+}
+
 export async function GET() {
   const auth = await requireNursery();
 
@@ -278,6 +318,7 @@ export async function POST(request: Request) {
 
   let body: {
     category?: string;
+    categoryId?: string;
     subCategory?: string;
     nameEn?: string;
     names?: unknown;
@@ -297,9 +338,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const category = typeof body.category === "string" ? body.category : "";
+  // Tree picker path: the node decides everything (existence +
+  // active + the synced legacy string). The legacy 5-string path
+  // stays for the fallback inputs.
+  let categoryId: string | null = null;
+  let category = typeof body.category === "string" ? body.category : "";
 
-  if (!CREATE_CATEGORIES.includes(category)) {
+  if (typeof body.categoryId === "string" && body.categoryId !== "") {
+    const resolved = await resolveTreeCategory(body.categoryId);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: 400 });
+    }
+    categoryId = resolved.node.id;
+    category = resolved.category;
+  } else if (!CREATE_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: "Category must be plants, saplings, inputs, pots or tools" }, { status: 400 });
   }
 
@@ -423,6 +475,7 @@ export async function POST(request: Request) {
     data: {
       nurseryId: nursery.id,
       category: category,
+      categoryId: categoryId ?? undefined,
       subCategory: subCategory === "" ? undefined : subCategory,
       nameEn: nameEn,
       names: names === undefined ? undefined : (names as Prisma.InputJsonValue),

@@ -367,7 +367,7 @@ export default function CheckoutPage() {
           ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <Btn href="/shop/orders">{t("my_orders")}</Btn>
-            <Btn href="/shop/category/plants" variant="outline">
+            <Btn href="/shop/c/plants" variant="outline">
               {t("browse")}
             </Btn>
           </div>
@@ -382,7 +382,7 @@ export default function CheckoutPage() {
         emoji="🛒"
         title={t("cart_empty")}
         text={t("cart_empty_s")}
-        action={<Btn href="/shop/category/plants">{t("browse")}</Btn>}
+        action={<Btn href="/shop/c/plants">{t("browse")}</Btn>}
       />
     );
   }

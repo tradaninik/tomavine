@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Fraunces, Karla } from "next/font/google";
-import { LangPill, LangProvider, useLang } from "@/lib/i18n";
+import { LangPill, LangProvider, displayName, useLang } from "@/lib/i18n";
 import { Btn, ProductTile, StarRow, ToastHost } from "@/app/shop/ui";
 import { InstallBanner } from "@/app/shop/pwa";
 import { LocationChip } from "@/app/shop/location";
 import { CART_EVENT, cartCount, loadCart } from "@/lib/cart";
+import { topPhoto, type CategoryTree } from "@/lib/category-tree";
 import type { ProductCard } from "@/lib/catalog";
 
 const display = Fraunces({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-display" });
@@ -17,12 +18,15 @@ const body = Karla({ subsets: ["latin"], variable: "--font-body" });
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
+// Fallback tiles when the category tree API is empty/unreachable —
+// the home page never goes blank. The 5 legacy keys equal their
+// tree slugs, so these links match the primary /shop/c/* route.
 const CATS = [
-  { href: "/shop/category/saplings", key: "saplings", emoji: "🌾", img: "/photos/cat-saplings.jpg" },
-  { href: "/shop/category/plants", key: "plants", emoji: "🪴", img: "/photos/cat-plants.jpg" },
-  { href: "/shop/category/inputs", key: "inputs", emoji: "🧪", img: "/photos/cat-inputs.jpg" },
-  { href: "/shop/category/pots", key: "pots", emoji: "🏺", img: "/photos/cat-pots.jpg" },
-  { href: "/shop/category/tools", key: "tools", emoji: "🛠️", img: "/photos/cat-tools.jpg" },
+  { href: "/shop/c/saplings", key: "saplings", emoji: "🌾", img: "/photos/cat-saplings.jpg" },
+  { href: "/shop/c/plants", key: "plants", emoji: "🪴", img: "/photos/cat-plants.jpg" },
+  { href: "/shop/c/inputs", key: "inputs", emoji: "🧪", img: "/photos/cat-inputs.jpg" },
+  { href: "/shop/c/pots", key: "pots", emoji: "🏺", img: "/photos/cat-pots.jpg" },
+  { href: "/shop/c/tools", key: "tools", emoji: "🛠️", img: "/photos/cat-tools.jpg" },
 ];
 
 type NurseryCard = {
@@ -49,11 +53,12 @@ type NavUser = {
 };
 
 function Landing() {
-  const { t } = useLang();
+  const { lang, t } = useLang();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [nurseries, setNurseries] = useState<NurseryCard[]>([]);
+  const [catTops, setCatTops] = useState<CategoryTree>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [user, setUser] = useState<NavUser | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -73,6 +78,16 @@ function Landing() {
       .then((data) => {
         if (data && Array.isArray(data.nurseries)) {
           setNurseries(data.nurseries.slice(0, 4));
+        }
+      })
+      .catch(() => undefined);
+    // Active top categories (2c) — tiles render from the tree when
+    // available; the hardcoded CATS above stay as the fallback.
+    fetch("/api/catalog/categories")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.categories)) {
+          setCatTops(data.categories);
         }
       })
       .catch(() => undefined);
@@ -133,9 +148,26 @@ function Landing() {
   const statCells = [
     { value: stats ? stats.nurseries : null, label: t("stats_nurseries", { n: stats ? stats.nurseries : 0 }) },
     { value: stats ? stats.listings : null, label: t("stats_listings", { n: stats ? stats.listings : 0 }) },
-    { value: stats ? stats.categories : null, label: t("stats_categories") },
+    { value: stats ? stats.categories : null, label: t("cat_stats") },
     { value: stats ? stats.rescue : null, label: t("stats_rescue", { n: stats ? stats.rescue : 0 }) },
   ];
+
+  // Category tiles: tree-first (all active tops, photos mapped by
+  // slug in lib/category-tree.ts), hardcoded legacy 5 as the
+  // never-blank fallback. Tile markup identical to before.
+  const tiles =
+    catTops.length > 0
+      ? catTops.map((top) => ({
+          key: top.slug,
+          href: `/shop/c/${top.slug}`,
+          img: topPhoto(top.slug),
+          label: displayName(
+            top.names,
+            lang,
+            top.names && typeof top.names.en === "string" && top.names.en.length > 0 ? top.names.en : top.slug,
+          ),
+        }))
+      : CATS.map((c) => ({ key: c.key, href: c.href, img: c.img, label: t(c.key) }));
 
   return (
     <div className="min-h-screen bg-[#F7F3E8]" style={{ fontFamily: "var(--font-body), system-ui, sans-serif" }}>
@@ -293,12 +325,12 @@ function Landing() {
             {t("shop_by_category")}
           </h2>
           <div className="mt-5 flex flex-wrap gap-4 sm:gap-7">
-            {CATS.map((c) => (
+            {tiles.map((c) => (
               <Link key={c.key} href={c.href} className="group flex w-20 flex-col items-center gap-2 text-center sm:w-24">
                 <span className="h-16 w-16 overflow-hidden rounded-full border-2 border-[#D6D2BC] bg-white transition group-hover:-translate-y-1 group-hover:border-[#2F6B3F] sm:h-20 sm:w-20">
-                  <img src={c.img} alt={t(c.key)} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                  <img src={c.img} alt={c.label} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
                 </span>
-                <span className="text-xs font-bold text-[#66735F] group-hover:text-[#1C3A2A]">{t(c.key)}</span>
+                <span className="text-xs font-bold text-[#66735F] group-hover:text-[#1C3A2A]">{c.label}</span>
               </Link>
             ))}
           </div>
@@ -310,7 +342,7 @@ function Landing() {
               <h2 className="text-xl font-semibold text-[#20291D] sm:text-2xl" style={SERIF}>
                 {t("fresh")}
               </h2>
-              <Link href="/shop/category/plants" className="text-sm font-bold text-[#2F6B3F] hover:underline">
+              <Link href="/shop/c/plants" className="text-sm font-bold text-[#2F6B3F] hover:underline">
                 {t("view_all")} →
               </Link>
             </div>

@@ -74,7 +74,7 @@ export default function OrdersPage() {
           emoji="🧺"
           title={t("orders_empty")}
           text={t("orders_empty_s")}
-          action={<Btn href="/shop/category/plants">{t("browse")}</Btn>}
+          action={<Btn href="/shop/c/plants">{t("browse")}</Btn>}
         />
       ) : (
         <div className="space-y-4">

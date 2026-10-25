@@ -71,7 +71,7 @@ export default function SuccessPage() {
         ) : null}
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Btn href="/shop/category/plants">{t("continue_shopping")}</Btn>
+          <Btn href="/shop/c/plants">{t("continue_shopping")}</Btn>
           <Btn href="/shop/orders" variant="outline">
             {t("my_orders")}
           </Btn>

@@ -66,7 +66,7 @@ export default function CartPage() {
         emoji="🛒"
         title={t("cart_empty")}
         text={t("cart_empty_s")}
-        action={<Btn href="/shop/category/plants">{t("browse")}</Btn>}
+        action={<Btn href="/shop/c/plants">{t("browse")}</Btn>}
       />
     );
   }
@@ -196,7 +196,7 @@ export default function CartPage() {
             <Btn href="/shop/checkout" disabled={missing.length > 0} size="lg" className="mt-4 w-full">
               {t("checkout")} →
             </Btn>
-            <Btn href="/shop/category/plants" variant="ghost" size="sm" className="mt-2 w-full">
+            <Btn href="/shop/c/plants" variant="ghost" size="sm" className="mt-2 w-full">
               {t("continue_shopping")}
             </Btn>
           </Card>
