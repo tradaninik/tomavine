@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { DICT_LEGAL } from "./i18n-legal";
 import { DICT_2C } from "./i18n-2c";
+import { DICT_PC } from "./i18n-pc";
 
 // ─────────────────────────────────────────────────────────────
 // Tomavine language layer (storefront).
@@ -304,6 +305,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "Not now",
     ...DICT_LEGAL.en,
     ...DICT_2C.en,
+    ...DICT_PC.en,
   },
   hi: {
     hero_eyebrow: "नर्सरी की हर ज़रूरत, एक जगह",
@@ -583,6 +585,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "अभी नहीं",
     ...DICT_LEGAL.hi,
     ...DICT_2C.hi,
+    ...DICT_PC.hi,
   },
   te: {
     hero_eyebrow: "నర్సరీ అవసరాలన్నీ ఒకే చోట",
@@ -862,6 +865,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "ఇప్పుడు వద్దు",
     ...DICT_LEGAL.te,
     ...DICT_2C.te,
+    ...DICT_PC.te,
   },
   kn: {
     hero_eyebrow: "ನರ್ಸರಿಯ ಎಲ್ಲ ಅಗತ್ಯಗಳು ಒಂದೇ ಕಡೆ",
@@ -1141,6 +1145,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "ಈಗ ಬೇಡ",
     ...DICT_LEGAL.kn,
     ...DICT_2C.kn,
+    ...DICT_PC.kn,
   },
   ta: {
     hero_eyebrow: "நர்சரி தேவைகள் அனைத்தும் ஒரே இடத்தில்",
@@ -1420,6 +1425,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "இப்போது வேண்டாம்",
     ...DICT_LEGAL.ta,
     ...DICT_2C.ta,
+    ...DICT_PC.ta,
   },
   mr: {
     hero_eyebrow: "नर्सरीच्या सर्व गरजा एकाच ठिकाणी",
@@ -1699,6 +1705,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     install_later: "आत्ता नको",
     ...DICT_LEGAL.mr,
     ...DICT_2C.mr,
+    ...DICT_PC.mr,
   },
 };
 

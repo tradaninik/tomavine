@@ -13,10 +13,14 @@ export async function GET() {
   }
 
   async function load() {
-    return db.user.findUnique({
+    const user = await db.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, phone: true, role: true, city: true, pincode: true, permissions: true },
     });
+    // Mission PC: a tombstoned phone means the account was deleted —
+    // treat the session as logged-out so a lingering JWT dies at the
+    // next /me poll.
+    return user && user.phone.startsWith("deleted:") ? null : user;
   }
 
   try {

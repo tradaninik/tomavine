@@ -109,7 +109,9 @@ export default function PrivacyPage() {
           . These rights include the access, correction and erasure rights given to you by India&rsquo;s{" "}
           <strong>Digital Personal Data Protection Act, 2023</strong>. We will act on verified requests within a
           reasonable period, except where the law requires us to retain certain records (for example, tax documents).
-          Deleting your account removes your phone number, name and addresses from active use.
+          Deleting your account removes your phone number, name and addresses from active use. You can also do this
+          yourself, without writing to us — open <strong>My Orders → Delete my account</strong> in the app; it takes
+          effect immediately.
         </p>
       </section>
 

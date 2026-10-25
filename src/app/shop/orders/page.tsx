@@ -40,6 +40,12 @@ export default function OrdersPage() {
   const { t } = useLang();
   const [rows, setRows] = useState<OrderRow[] | null>(null);
   const [error, setError] = useState(false);
+  // Mission PC: the account area — the self-service deletion entry
+  // point Google Play requires for apps with accounts.
+  const [me, setMe] = useState<{ role: string } | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delDone, setDelDone] = useState(false);
+  const [delError, setDelError] = useState(false);
 
   const load = useCallback(() => {
     setRows(null);
@@ -57,6 +63,45 @@ export default function OrdersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.user) {
+          setMe({ role: data.user.role });
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  // Mission PC: wipe the account PII, then end the session. The API
+  // anonymizes (order records stay for statutory retention, without
+  // the identity) and /api/auth/me already treats the tombstoned row
+  // as logged-out — logout here also clears the cookie immediately.
+  async function deleteAccount() {
+    if (delBusy) {
+      return;
+    }
+    const sure = window.confirm(t("del_confirm"));
+    if (!sure) {
+      return;
+    }
+    setDelBusy(true);
+    setDelError(false);
+    try {
+      const res = await fetch("/api/auth/account", { method: "POST" });
+      if (!res.ok) {
+        throw new Error("failed");
+      }
+      await fetch("/api/auth/logout", { method: "POST" });
+      setDelDone(true);
+    } catch {
+      setDelError(true);
+    } finally {
+      setDelBusy(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -114,6 +159,29 @@ export default function OrdersPage() {
           ))}
         </div>
       )}
+
+      {/* Mission PC: self-service account deletion — required by
+          Google Play for apps with accounts. Customers only; seller
+          and staff accounts are offboarded by the super admin. */}
+      {delDone ? (
+        <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          {t("del_done")}
+        </div>
+      ) : me?.role === "CUSTOMER" ? (
+        <div className="mt-8 rounded-2xl border border-red-100 bg-white p-5">
+          <p className="font-bold text-[#1C3A2A]">{t("del_account")}</p>
+          <p className="mt-1 text-sm text-[#66735F]">{t("del_account_s")}</p>
+          {delError ? <p className="mt-2 text-sm text-red-700">{t("load_error")}</p> : null}
+          <button
+            type="button"
+            onClick={deleteAccount}
+            disabled={delBusy}
+            className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+          >
+            {t("del_account")}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
