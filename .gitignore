@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# native release signing (never commit) — see PLAY-RUNBOOK.md
+*.jks
+*.keystore
+android/keystore.properties

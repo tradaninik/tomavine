@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SITE_URL } from "@/lib/site";
+import { NativeBridge } from "@/components/native-bridge";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +19,7 @@ const geistMono = Geist_Mono({
 // (home, login, sell). The shop/admin layouts set their own titles; the
 // template appends the brand to child-segment titles ("Seller workspace").
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   applicationName: "Tomavine",
   title: {
     default: "Tomavine — plants, saplings & garden care",
@@ -24,6 +27,15 @@ export const metadata: Metadata = {
   },
   description:
     "Shop nursery plants, farmer saplings, organic inputs, pots and tools from physically verified nurseries. Cash on delivery.",
+  openGraph: {
+    type: "website",
+    siteName: "Tomavine",
+    locale: "en_IN",
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "Tomavine" }],
+  },
+  twitter: {
+    card: "summary",
+  },
   appleWebApp: {
     capable: true,
     title: "Tomavine",
@@ -49,7 +61,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* Deep-link/external-link router for the Android shell (M2).
+            Renders null on the web — effect only inside Capacitor. */}
+        <NativeBridge />
+      </body>
     </html>
   );
 }

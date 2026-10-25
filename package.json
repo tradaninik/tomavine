@@ -8,12 +8,17 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "cap:sync": "cap sync android",
+    "android:release": "cd android && gradlew.bat bundleRelease assembleRelease",
+    "android:icons": "python scripts/make-android-icons.py"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
     "@prisma/client": "^6",
     "@upstash/ratelimit": "^2",
     "@upstash/redis": "^1",
@@ -25,6 +30,8 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22",
     "@types/react": "^19",
