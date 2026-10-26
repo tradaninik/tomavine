@@ -28,6 +28,7 @@ type NurseryInfo = {
   ratingAvg: number;
   retailOk: boolean;
   bulkOk: boolean;
+  verified: boolean | null;
   physVerifiedAt: string | null;
 };
 
@@ -126,7 +127,7 @@ export function NurseryDetail() {
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#66735F]">
                 <StarRow value={nursery.ratingAvg} />
                 <span className="font-bold text-[#20291D]">{nursery.ratingAvg.toFixed(1)}</span>
-                {nursery.physVerifiedAt ? <Pill tone="leaf">🛡️ {t("verified")}</Pill> : null}
+                {nursery.verified || nursery.physVerifiedAt ? <Pill tone="leaf">🛡️ {t("verified")}</Pill> : null}
                 {nursery.scope === "RADIUS" && nursery.scopeKm ? <Pill tone="sky">~{nursery.scopeKm} km</Pill> : null}
               </div>
             </div>

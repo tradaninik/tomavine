@@ -71,6 +71,7 @@ model User {
 }
 
 model Nursery {
+  verified Boolean @default(false)
   id             String             @id @default(cuid())
   ownerId        String             @unique
   owner          User               @relation(fields: [ownerId], references: [id])
@@ -310,7 +311,7 @@ model PlantJournal {
 // payment ever touches the gateway for these).
 model BulkLead {
   id        String   @id @default(cuid())
-  productId String
+  productId String?
   qty       Int
   city      String
   company   String
@@ -322,6 +323,7 @@ model BulkLead {
   notes     String?
   status    String   @default("new")
   parts     Json?
+  items     Json?
   quotes    Quote[]
 }
 
@@ -430,4 +432,13 @@ model NurseryServiceArea {
 
   @@unique([nurseryId, locationId])
   @@index([locationId])
+}
+
+// Mission S3: admin-editable site configuration (bulk tiers, max qty,
+// pre-order switch, WhatsApp number). One row, key "bulk"; read per
+// request by src/lib/settings.ts with code defaults as fallback.
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

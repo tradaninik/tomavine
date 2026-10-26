@@ -25,6 +25,19 @@ export default function CartPage() {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [loading, setLoading] = useState(true);
+  // Mission S3: live admin settings so tier chips + totals always
+  // match the owner's current configuration.
+  const [tiers, setTiers] = useState<{ minQty: number; pct: number }[] | null>(null);
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.tiers)) {
+          setTiers(data.tiers);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const current = loadCart();
@@ -46,7 +59,7 @@ export default function CartPage() {
   }, []);
 
   const missing = missingLines(lines, products);
-  const totals = computeTotals(lines, products, "DELIVERY");
+  const totals = computeTotals(lines, products, "DELIVERY", "cod", tiers === null ? undefined : { tiers: tiers });
 
   function changeQty(productId: string, variantId: string | null, qty: number) {
     setLines(setQty(productId, variantId, qty));
@@ -98,8 +111,8 @@ export default function CartPage() {
                   // Mission S2 (scope A1): per-line tier hint — the next
                   // tier the qty has not reached yet ("Buy 10+, save 5%"),
                   // or the applied badge once the top tier is reached.
-                  const appliedTier = bulkTierFor(l.qty);
-                  const upcomingTier = nextBulkTier(l.qty);
+                  const appliedTier = bulkTierFor(l.qty, tiers ?? undefined);
+                  const upcomingTier = nextBulkTier(l.qty, tiers ?? undefined);
                   const tierChip =
                     upcomingTier !== null
                       ? `🏷️ ${t("tier_hint", { n: upcomingTier.minQty, p: upcomingTier.pct })}`

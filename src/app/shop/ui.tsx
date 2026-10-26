@@ -546,6 +546,7 @@ const NAV_LINKS = [
   { href: "/shop/c/tools", key: "tools", accent: false },
   { href: "/shop/nurseries", key: "nurseries", accent: false },
   { href: "/shop/advisor", key: "advisor", accent: false },
+  { href: "/bulk", key: "s3_nav_bulk", accent: false },
   { href: "/shop/rescue", key: "rescue", accent: true },
 ];
 
@@ -785,6 +786,12 @@ export function Footer() {
         </Link>
         <Link href="/legal/grievance" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
           Grievance
+        </Link>
+        <Link href="/policies/seller" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          {t("s3_policy_seller")}
+        </Link>
+        <Link href="/policies/delivery" className="underline-offset-2 hover:text-[#F7F3E8] hover:underline">
+          {t("s3_policy_delivery")}
         </Link>
       </nav>
     </footer>

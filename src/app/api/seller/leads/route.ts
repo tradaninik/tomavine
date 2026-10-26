@@ -19,7 +19,10 @@ export async function GET() {
   const productIds = products.map((p) => p.id);
 
   const leads = await db.bulkLead.findMany({
-    where: { productId: { in: productIds } },
+    // Mission S3: RFQ leads carry an item list and no productId - with
+    // a single verified nursery they belong to this console. Product
+    // leads stay scoped to this nursery's own products.
+    where: { OR: [{ productId: { in: productIds } }, { type: "RFQ" }] },
     orderBy: { id: "desc" },
     include: {
       quotes: { where: { nurseryId: nursery.id } },
@@ -41,11 +44,14 @@ export async function GET() {
       type: l.type,
       notes: l.notes,
       status: l.status,
-      product: productById.get(l.productId) ?? {
-        id: l.productId,
-        nameEn: "Unknown product",
-        category: "unknown",
-      },
+      product: l.productId
+        ? productById.get(l.productId) ?? {
+            id: l.productId,
+            nameEn: "Unknown product",
+            category: "unknown",
+          }
+        : null,
+      items: Array.isArray(l.items) ? l.items : [],
       quotes: l.quotes.map((q) => ({
         id: q.id,
         amount: q.amount,
@@ -90,8 +96,10 @@ export async function POST(request: Request) {
 
   const lead = await db.bulkLead.findFirst({
     where: {
-      id: leadId,
-      productId: { in: ownProducts.map((p) => p.id) },
+      OR: [
+        { id: leadId, productId: { in: ownProducts.map((p) => p.id) } },
+        { id: leadId, type: "RFQ" },
+      ],
     },
   });
 

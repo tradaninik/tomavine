@@ -36,6 +36,11 @@ export default function SellerSettingsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  // Mission S3: site-wide bulk settings (tiers, max qty, pre-order, WhatsApp).
+  const [siteTiers, setSiteTiers] = useState<{ minQty: number; pct: number }[]>([]);
+  const [siteMaxQty, setSiteMaxQty] = useState("500");
+  const [sitePreorder, setSitePreorder] = useState(true);
+  const [siteWa, setSiteWa] = useState("");
 
   useEffect(() => {
     fetch("/api/seller/settings")
@@ -50,6 +55,13 @@ export default function SellerSettingsPage() {
         setScopeKm(n.scopeKm === null ? "15" : String(n.scopeKm));
         setBulkOk(n.bulkOk);
         setRetailOk(n.retailOk);
+        const site = json.site;
+        if (site && Array.isArray(site.tiers)) {
+          setSiteTiers(site.tiers.map((x: { minQty: number; pct: number }) => ({ minQty: x.minQty, pct: x.pct })));
+          setSiteMaxQty(String(site.maxQty ?? 500));
+          setSitePreorder(site.preorderEnabled !== false);
+          setSiteWa(site.whatsappNumber ?? "");
+        }
       })
       .catch(() => setError("Could not load settings."));
   }, []);
@@ -68,6 +80,15 @@ export default function SellerSettingsPage() {
           scopeKm: scope === "RADIUS" ? Number(scopeKm) : null,
           bulkOk: bulkOk,
           retailOk: retailOk,
+          siteConfig:
+            siteTiers.length >= 1
+              ? {
+                  tiers: siteTiers,
+                  maxQty: Number(siteMaxQty),
+                  preorderEnabled: sitePreorder,
+                  whatsappNumber: siteWa.trim() === "" ? null : siteWa.trim(),
+                }
+              : undefined,
         }),
       });
 
@@ -164,6 +185,89 @@ export default function SellerSettingsPage() {
             {busy ? "Saving…" : "Save settings"}
           </Btn>
         </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-[#1C3A2A]">Bulk pricing &amp; pre-orders (S3)</h2>
+        <p className="mt-1 text-sm text-[#1C3A2A]/60">
+          Tiers apply per line item at checkout. Changes apply immediately to new checkouts - no deploy needed.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {siteTiers.map((tier, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <input
+                className="w-28 rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2 text-sm"
+                type="number"
+                min={2}
+                value={tier.minQty}
+                onChange={(e) =>
+                  setSiteTiers(siteTiers.map((x, ix) => (ix === i ? { ...x, minQty: Number(e.target.value) } : x)))
+                }
+              />
+              <span className="text-sm text-[#1C3A2A]/60">or more units -&gt;</span>
+              <input
+                className="w-24 rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2 text-sm"
+                type="number"
+                min={0}
+                max={90}
+                value={tier.pct}
+                onChange={(e) =>
+                  setSiteTiers(siteTiers.map((x, ix) => (ix === i ? { ...x, pct: Number(e.target.value) } : x)))
+                }
+              />
+              <span className="text-sm text-[#1C3A2A]/60">% off that line</span>
+              <button
+                type="button"
+                disabled={siteTiers.length <= 1}
+                onClick={() => setSiteTiers(siteTiers.filter((_, ix) => ix !== i))}
+                className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          disabled={siteTiers.length >= 6}
+          onClick={() => setSiteTiers([...siteTiers, { minQty: 50, pct: 15 }])}
+          className="mt-3 rounded-lg border-2 border-[#2F6B3F] px-4 py-2 text-sm font-semibold text-[#2F6B3F] hover:bg-[#EDF2E6] disabled:opacity-40"
+        >
+          + Add tier
+        </button>
+
+        <div className="mt-4 space-y-3">
+          <label className="block text-sm font-medium text-[#1C3A2A]">
+            Maximum quantity per item
+            <input
+              className="mt-1 w-40 rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+              type="number"
+              min={1}
+              max={1000}
+              value={siteMaxQty}
+              onChange={(e) => setSiteMaxQty(e.target.value.replace(/\D/g, ""))}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-[#1C3A2A]">
+            <input type="checkbox" checked={sitePreorder} onChange={(e) => setSitePreorder(e.target.checked)} />
+            Accept pre-orders (out-of-stock products show a Pre-order button)
+          </label>
+          <label className="block text-sm font-medium text-[#1C3A2A]">
+            WhatsApp number (digits only; leave empty to hide all WhatsApp buttons)
+            <input
+              className="mt-1 w-48 rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+              inputMode="numeric"
+              placeholder="9198XXXXXXXX"
+              value={siteWa}
+              onChange={(e) => setSiteWa(e.target.value.replace(/\D/g, "").slice(0, 15))}
+            />
+          </label>
+        </div>
+        <p className="mt-4 text-xs text-[#1C3A2A]/50">
+          The Save button above saves these settings together with your nursery profile.
+        </p>
       </Card>
     </div>
   );

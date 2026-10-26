@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 import { DELIVERY_STATE_OPTIONS } from "@/lib/states";
+import { getSettings } from "@/lib/settings";
 
 // Mission S2 (scope A2/B): the upgraded quote / pre-order request.
 // phone is stored canonically as +91XXXXXXXXXX (accepted with or
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
   const body = parsed.data;
+  const settings = await getSettings();
+  if (body.type === "PREORDER" && !settings.preorderEnabled) {
+    return NextResponse.json({ error: "preorders_disabled" }, { status: 400 });
+  }
   const product = await db.product.findFirst({
     where: { id: body.productId, hidden: false, nursery: { status: "VERIFIED" } },
     select: { id: true },

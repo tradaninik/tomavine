@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/security";
 import { notifySellerNewOrder } from "@/lib/notify";
 import { nurseryFeatureOn } from "@/lib/nursery-features";
-import { bulkDiscountFor, MAX_QTY } from "@/lib/bulk-tiers";
+import { bulkDiscountFor } from "@/lib/bulk-tiers";
+import { getSettings } from "@/lib/settings";
 import { DELIVERY_STATE_OPTIONS } from "@/lib/states";
 
 // Supply goods attract 18% GST; everything else (plants, saplings,
@@ -32,7 +33,7 @@ const Addr = z.object({ name: z.string().min(2), phone: z.string().regex(/^\+91[
   // only: no state is blocked, no automatic transport fee is added.
   state: z.enum([...DELIVERY_STATE_OPTIONS] as [string, ...string[]]) });
 const Body = z.object({
-  items: z.array(z.object({ productId: z.string(), variantId: z.string().nullish(), qty: z.number().int().min(1).max(MAX_QTY) })).min(1).max(20),
+  items: z.array(z.object({ productId: z.string(), variantId: z.string().nullish(), qty: z.number().int().min(1) })).min(1).max(20),
   mode: z.enum(["DELIVERY", "PICKUP"]), address: Addr,
   paymentMethod: z.enum(["upi", "card", "nb", "wallet", "cod"]),
 });
@@ -47,6 +48,13 @@ export async function POST(req: Request) {
   const p = Body.safeParse(await req.json().catch(() => null));
   if (!p.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
   const { items, mode, address, paymentMethod } = p.data;
+
+  // Mission S3: admin-configurable per-line cap (default 500) and live
+  // tier config. The server is authoritative; client math is display-only.
+  const settings = await getSettings();
+  if (items.some((it) => it.qty > settings.maxQty)) {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
 
   const ids = [...new Set(items.map(i => i.productId))];
   const products = await db.product.findMany({
@@ -69,7 +77,7 @@ export async function POST(req: Request) {
     // 25+ = 10%). GST applies on the POST-discount value; the sum
     // lands in Order.discount. Mirrors lib/cart.ts computeTotals
     // EXACTLY so display == charge.
-    const lineDiscount = bulkDiscountFor(unit, it.qty);
+    const lineDiscount = bulkDiscountFor(unit, it.qty, settings.tiers);
     const g = groups.get(prod.nurseryId) ?? { items: [], sub: 0, discount: 0, tax: 0, nursery: prod.nursery };
     g.items.push({ productId: prod.id, variantId: v?.id ?? null, qty: it.qty, unitPrice: unit,
       nameSnap: (prod.names as any)?.en ?? prod.nameEn, vlabel: v?.label ?? null });

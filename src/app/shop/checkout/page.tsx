@@ -114,6 +114,18 @@ export default function CheckoutPage() {
   const [accepted, setAccepted] = useState(false);
   const [placedCodes, setPlacedCodes] = useState<string[]>([]);
   const [idemKey] = useState<string>(newIdemKey);
+  // Mission S3: live admin settings so the summary matches the charge.
+  const [tiers, setTiers] = useState<{ minQty: number; pct: number }[] | null>(null);
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.tiers)) {
+          setTiers(data.tiers);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const current = loadCart();
@@ -192,7 +204,7 @@ export default function CheckoutPage() {
   }, []);
 
   const missing = missingLines(lines, products);
-  const totals = computeTotals(lines, products, mode, payMethod);
+  const totals = computeTotals(lines, products, mode, payMethod, tiers === null ? undefined : { tiers: tiers });
   const codAllowed = paymentAllowed(products, "cod");
   const onlineAllowed = paymentAllowed(products, "online");
   const formValid =

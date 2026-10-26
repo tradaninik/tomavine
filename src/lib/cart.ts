@@ -1,7 +1,7 @@
 "use client";
 
 import { LEGACY_SUPPLY_CATEGORIES, legacyTaxRateFor, resolveRate } from "@/lib/category-gst";
-import { MAX_QTY as BULK_MAX_QTY, bulkDiscountFor } from "@/lib/bulk-tiers";
+import { MAX_QTY as BULK_MAX_QTY, bulkDiscountFor, type BulkTier } from "@/lib/bulk-tiers";
 
 // ─────────────────────────────────────────────────────────────
 // Tomavine customer cart (storefront).
@@ -262,7 +262,7 @@ export function displayPriceOf(
   return { now: before, before: before };
 }
 
-export function computeTotals(lines: CartLine[], products: CartProduct[], mode: "DELIVERY" | "PICKUP", payMethod: "cod" | "online" = "cod"): CartTotals {
+export function computeTotals(lines: CartLine[], products: CartProduct[], mode: "DELIVERY" | "PICKUP", payMethod: "cod" | "online" = "cod", opts?: { tiers?: readonly BulkTier[] }): CartTotals {
   const byId = new Map<string, CartProduct>();
   for (const p of products) {
     byId.set(p.id, p);
@@ -280,7 +280,7 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
     // Mission S2 (scope A1): auto tier discount per line — same math
     // as api/orders (Math.round(lineSub * pct/100)); GST then applies
     // on the post-discount value so display == charge.
-    const lineDiscount = bulkDiscountFor(unit, line.qty);
+    const lineDiscount = bulkDiscountFor(unit, line.qty, opts?.tiers);
     const lineTax = Math.round((lineSub - lineDiscount) * resolveRate(product));
     let group = groups.get(product.nurseryId);
     if (!group) {

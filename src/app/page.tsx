@@ -189,6 +189,9 @@ function Landing() {
             <LangPill />
             {user ? (
               <>
+                <Link href="/bulk" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#24562F] hover:bg-[#2F6B3F]/10 sm:block">
+                  {t("s3_nav_bulk")}
+                </Link>
                 <Link href="/shop/orders" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#1C3A2A]/80 hover:bg-[#2F6B3F]/10 sm:block">
                   {t("my_orders")}
                 </Link>
@@ -207,9 +210,14 @@ function Landing() {
                 </button>
               </>
             ) : (
-              <Link href="/login" className="rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]">
-                {t("login")}
-              </Link>
+              <>
+                <Link href="/bulk" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-[#24562F] hover:bg-[#2F6B3F]/10 sm:block">
+                  {t("s3_nav_bulk")}
+                </Link>
+                <Link href="/login" className="rounded-xl bg-[#2F6B3F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#24562F]">
+                  {t("login")}
+                </Link>
+              </>
             )}
             <Link
               href="/shop/cart"
@@ -306,6 +314,18 @@ function Landing() {
         </section>
 
         {/* ── Stats band ── */}
+        {/* Mission S3 (scope B): bulk orders banner for farms, landscapers, hotels and institutions. */}
+        <section className="mx-auto max-w-6xl px-4 pt-10">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-[#1C3A2A] p-8 text-[#F7F3E8]">
+            <p className="max-w-xl text-xl font-semibold sm:text-2xl" style={SERIF}>
+              {t("s3_home_title")}
+            </p>
+            <Btn href="/bulk" size="lg">
+              {t("s3_bulk_link")} &rarr;
+            </Btn>
+          </div>
+        </section>
+
         <section className="mx-auto max-w-6xl px-4 pt-12 sm:pt-14">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-3xl bg-[#1C3A2A] shadow-sm sm:grid-cols-4">
             {statCells.map((s, i) => (

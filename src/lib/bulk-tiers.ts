@@ -32,9 +32,9 @@ export const MAX_QTY = 500;
 export type BulkTier = { minQty: number; pct: number };
 
 // The tier a given quantity earns (null when below every tier).
-export function bulkTierFor(qty: number): BulkTier | null {
+export function bulkTierFor(qty: number, tiers: readonly BulkTier[] = BULK_TIERS): BulkTier | null {
   let earned: BulkTier | null = null;
-  for (const tier of BULK_TIERS) {
+  for (const tier of tiers) {
     if (qty >= tier.minQty) {
       earned = tier;
     }
@@ -44,8 +44,8 @@ export function bulkTierFor(qty: number): BulkTier | null {
 
 // Whole-rupee line discount for (unit, qty) — the exact amount
 // both computeTotals and api/orders store/charge.
-export function bulkDiscountFor(unitPrice: number, qty: number): number {
-  const tier = bulkTierFor(qty);
+export function bulkDiscountFor(unitPrice: number, qty: number, tiers: readonly BulkTier[] = BULK_TIERS): number {
+  const tier = bulkTierFor(qty, tiers);
   if (!tier) {
     return 0;
   }
@@ -54,8 +54,8 @@ export function bulkDiscountFor(unitPrice: number, qty: number): number {
 
 // The next tier the quantity has NOT reached yet — powers the
 // "Buy 10+, save 5%" nudge on cart lines and product pages.
-export function nextBulkTier(qty: number): BulkTier | null {
-  for (const tier of BULK_TIERS) {
+export function nextBulkTier(qty: number, tiers: readonly BulkTier[] = BULK_TIERS): BulkTier | null {
+  for (const tier of tiers) {
     if (qty < tier.minQty) {
       return tier;
     }

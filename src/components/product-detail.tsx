@@ -19,6 +19,9 @@ import { addToCart, displayPriceOf, MAX_QTY } from "@/lib/cart";
 import { BULK_TIERS } from "@/lib/bulk-tiers";
 import { DELIVERY_STATE_OPTIONS, HOME_STATE, isDeliveryState } from "@/lib/states";
 import { ShareRow } from "@/components/share-row";
+import { whatsappLink, type PublicSettings } from "@/lib/settings-shared";
+import { ProductCtaCard } from "@/components/product-cta-card";
+import { ProductMobileBar } from "@/components/product-mobile-bar";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
@@ -47,6 +50,7 @@ type Nursery = {
   ratingAvg: number;
   bulkOk: boolean;
   retailOk: boolean;
+  verified: boolean | null;
   physVerifiedAt: string | null;
   districtCode: string | null;
   lat: number | null;
@@ -133,6 +137,24 @@ export function ProductDetail() {
   const [leadSentType, setLeadSentType] = useState<"BULK" | "PREORDER">("BULK");
   const [leadError, setLeadError] = useState("");
   const enquiryRef = useRef<HTMLDivElement>(null);
+  // Mission S3: admin-configurable settings, fetched live so hints and
+  // CTAs always match what the owner set in the seller console.
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/settings/public")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data && Array.isArray(data.tiers)) {
+          setSettings(data);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const tiers = settings === null ? null : settings.tiers;
   const { geo } = useGeo();
 
   useEffect(() => {
@@ -281,7 +303,7 @@ export function ProductDetail() {
     isDeliveryState(leadState);
   // Mission S2 (scope A1): the tier ladder for the hint chip, from
   // the single config module — "Buy 10+, save 5% · Buy 25+, save 10%".
-  const tierHint = BULK_TIERS.map((tier) => t("tier_hint", { n: tier.minQty, p: tier.pct })).join(" · ");
+  const tierHint = (tiers ?? BULK_TIERS).map((tier) => t("tier_hint", { n: tier.minQty, p: tier.pct })).join(" · ");
 
   function handleAdd() {
     const res = addToCart(product!.id, variantId, qty);
@@ -374,7 +396,7 @@ export function ProductDetail() {
               <div className="mt-1 flex items-center gap-2 text-xs text-[#66735F]">
                 <StarRow value={product.nursery.ratingAvg} />
                 <span className="font-bold">{product.nursery.ratingAvg.toFixed(1)}</span>
-                {product.nursery.physVerifiedAt ? <Pill tone="leaf">🛡️ {t("verified")}</Pill> : null}
+                {(product.nursery.verified || product.nursery.physVerifiedAt) ? <Pill tone="leaf">🛡️ {t("verified")}</Pill> : null}
               </div>
             </div>
           </Card>
@@ -382,6 +404,13 @@ export function ProductDetail() {
 
         <div className="space-y-4">
           <div>
+            {/* Mission S3 (scope B): slim bulk strip above the title. */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#EDF2E6] px-3 py-2 text-sm">
+              <span className="font-medium text-[#1C3A2A]/80">{t("s3_bulk_strip")}</span>
+              <a href="#enquiry" className="font-bold text-[#2F6B3F] hover:underline">
+                {t("s3_bulk_link")} &rarr;
+              </a>
+            </div>
             {badgeList.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2">
                 {badgeList.map((b) => (
@@ -472,14 +501,14 @@ export function ProductDetail() {
                 −
               </button>
               <span className="w-10 text-center text-sm font-bold text-[#1C3A2A]">{qty}</span>
-              <button type="button" onClick={() => setQty((q) => Math.min(MAX_QTY, q + 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
+              <button type="button" onClick={() => setQty((q) => Math.min(settings === null ? MAX_QTY : settings.maxQty, q + 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
                 +
               </button>
             </div>
             <Btn onClick={handleAdd} disabled={oos} size="lg">
               🛒 {t("add_to_cart")}
             </Btn>
-            {oos ? (
+            {oos && (settings === null || settings.preorderEnabled) ? (
               // Mission S2 (scope B): out of stock -> live Pre-order
               // button (opens the enquiry form with type=PREORDER).
               <Btn onClick={handlePreorder} variant="outline" size="lg">
@@ -492,14 +521,35 @@ export function ProductDetail() {
               </Btn>
             ) : null}
           </div>
-          {!oos && BULK_TIERS.length > 0 ? (
+          {!oos && (tiers ?? BULK_TIERS).length > 0 ? (
             // Mission S2 (scope A1): tier ladder hint under the CTA.
             <p className="text-xs font-semibold text-[#24562F]">🏷️ {tierHint}</p>
           ) : null}
 
           <ShareRow key={product.id} title={name} text={`From ${product.nursery.name}, ${product.nursery.city}`} />
+
+          {/* Mission S3 (scope B): prominent sticky CTA card beside the buy box. */}
+          <ProductCtaCard
+            name={name}
+            stock={product.stock}
+            settings={settings}
+            labels={{
+              bulk: t("s3_cta_bulk"),
+              preorder: t("s3_cta_preorder"),
+              whatsapp: t("s3_cta_whatsapp"),
+              qty: t("qty"),
+            }}
+          />
         </div>
       </div>
+
+      {/* Mission S3 (scope B): sticky mobile bottom bar with the enquiry CTA. */}
+      <ProductMobileBar
+        stock={product.stock}
+        settings={settings}
+        labels={{ bulk: t("s3_cta_bulk"), preorder: t("s3_cta_preorder") }}
+      />
+      <div className="h-16 md:hidden" />
 
       {isSapling && product.agri ? (
         <div className="rounded-3xl bg-[#1C3A2A] p-6 text-[#F7F3E8]">
@@ -592,7 +642,7 @@ export function ProductDetail() {
 
       {product.nursery.bulkOk ? (
         <Card className="border-[#2F6B3F]/30 bg-[#EDF2E6]/60">
-          <div ref={enquiryRef}>
+          <div id="enquiry" ref={enquiryRef} className="scroll-mt-28">
             <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
               🚜 {t("enquiry_title")}
             </h2>
@@ -600,6 +650,21 @@ export function ProductDetail() {
             {leadSent ? (
               <div className="mt-4 rounded-2xl border border-[#2F6B3F]/30 bg-white p-4 text-sm font-semibold text-[#24562F]">
                 ✅ {leadSentType === "PREORDER" ? t("enquiry_sent_preorder") : t("enquiry_sent")}
+                {settings !== null && settings.whatsappNumber ? (
+                  <a
+                    href={whatsappLink(
+                      settings.whatsappNumber,
+                      "Hello! I just sent a " +
+                        (leadSentType === "PREORDER" ? "pre-order" : "bulk") +
+                        " enquiry for " + name + " - qty " + Number(leadQty || 0) + "."
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl border-2 border-[#2F6B3F] px-4 py-2 text-sm font-bold text-[#2F6B3F] hover:bg-[#EDF2E6]"
+                  >
+                    {t("s3_cta_whatsapp")}
+                  </a>
+                ) : null}
               </div>
             ) : meChecked && !me ? (
               <div className="mt-4">
