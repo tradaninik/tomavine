@@ -7,8 +7,10 @@ import { PUBLIC_PRODUCT_INCLUDE, productCard, publicProductWhere } from "@/lib/c
 // node ids server-side: a top matches its whole subtree (its own
 // products + every sub's), a sub matches just that sub. A legacy
 // string fallback keeps products with categoryId NULL (created
-// before/without the tree) on the right page via their legacy
-// top key (+ legacy subCategory on sub pages). Visibility rules
+// before/without the tree) on the right page: a TOP page takes every
+// legacy product of its top key, a SUB page only those whose legacy
+// subCategory string names that sub — so an unlinked legacy product
+// no longer leaks onto every sibling sub page. Visibility rules
 // (publicProductWhere) are unchanged.
 async function applyCategorySlugFilter(where: Prisma.ProductWhereInput, catSlug: string): Promise<Prisma.ProductWhereInput | null> {
   const node = await db.category.findUnique({
@@ -25,9 +27,12 @@ async function applyCategorySlugFilter(where: Prisma.ProductWhereInput, catSlug:
   const topKey = node.parentId === null ? node.legacyKey : (node.parent?.legacyKey ?? null);
   const or: Prisma.ProductWhereInput[] = [{ categoryId: { in: ids } }];
   if (topKey) {
-    or.push({ categoryId: null, category: topKey });
-    if (node.parentId !== null) {
-      // Sub page: match the legacy presentation string too.
+    if (node.parentId === null) {
+      // Top page: every legacy product of this top key belongs here.
+      or.push({ categoryId: null, category: topKey });
+    } else {
+      // Sub page: only the legacy products whose presentation
+      // string names this exact sub.
       or.push({ categoryId: null, category: topKey, subCategory: node.slug });
     }
   }

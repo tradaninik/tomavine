@@ -20,6 +20,26 @@ Both images were center-cropped to 900x900 and re-encoded as progressive
 JPEG. No other modifications. The authors are credited above as a courtesy;
 CC0 imposes no attribution obligation.
 
+## Plant collection photos (Oct 2026, mission PC3)
+
+The 120 plant-catalog photos added with the indoor plant collection
+(`plt_*` products — indoor, flowering, succulents, herbs, medicinal
+and aromatic subcategories) are original AI-generated artwork created
+for Tomavine with the project's image-generation tooling in October
+2026. Each photo was generated from a text prompt describing the
+species and a consistent studio-pot style; no third-party photograph,
+scan, or artwork was used as source material in any form, so no
+third-party license applies. They are treated exactly like the app
+icons below: original project artwork with no restrictions beyond the
+repository's own terms.
+
+Generation details for reproducibility: 1024x1024 source renders,
+center-cropped and downscaled to 640x640 progressive JPEG (quality 80)
+by `scripts/plants/optimize_images.py`. Species depicted are
+botanically described in the prompt list kept with the mission
+tooling; product listings carry the matching botanical name in the
+`Product.botanical` column.
+
 ## Legacy photos (pre-Oct 2026)
 
 The remaining photos in this directory (areca-palm, chilli-saplings,
