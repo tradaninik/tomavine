@@ -10,6 +10,7 @@ import type { ProductCard } from "@/lib/catalog";
 import { nurseryFeatureOn } from "@/lib/nursery-features";
 import { clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
+import { DELIVERY_STATE_OPTIONS, HOME_STATE } from "@/lib/states";
 import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -44,6 +45,17 @@ function paymentAllowed(products: ProductCard[], key: "cod" | "online"): boolean
   return true;
 }
 
+// Mission S2 (scope C): the transport-cost note appears whenever the
+// chosen state is not the nursery's home state. Informational only —
+// no state is blocked, no automatic fee is ever added.
+function TransportNote() {
+  const { t } = useLang();
+  return (
+    <div className="mt-3 rounded-2xl border border-[#E39B2D]/40 bg-[#F7F3E8] p-3 text-sm font-semibold text-[#8a5a12]">
+      🚛 {t("transport_note")}
+    </div>
+  );
+}
 function newIdemKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -92,6 +104,10 @@ export default function CheckoutPage() {
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [pincode, setPincode] = useState("");
+  // Mission S2 (scope C): delivery state dropdown — 7 covered states
+  // + "Other". Default is the nursery's home state; picking anything
+  // else shows the transport-cost note (no blocking, no auto fee).
+  const [addrState, setAddrState] = useState<string>(HOME_STATE);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [payProblem, setPayProblem] = useState("");
@@ -266,7 +282,7 @@ export default function CheckoutPage() {
       }
     }
 
-    window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false }));
+    window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false, state: addrState }));
     router.push("/shop/success");
   }
 
@@ -301,6 +317,7 @@ export default function CheckoutPage() {
             street: street.trim() === "" ? undefined : street.trim(),
             city: city.trim(),
             pincode: pincode.trim(),
+            state: addrState,
           },
           paymentMethod: payMethod === "cod" ? "cod" : "upi",
         }),
@@ -327,7 +344,7 @@ export default function CheckoutPage() {
       const duplicate = data ? data.duplicate === true : false;
 
       if (duplicate) {
-        window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders: [], duplicate: true }));
+        window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders: [], duplicate: true, state: addrState }));
         router.push("/shop/success");
         return;
       }
@@ -335,7 +352,7 @@ export default function CheckoutPage() {
         await runOnlinePayment(orders, (data && data.keyId) || null);
         return;
       }
-      window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false }));
+      window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ orders, duplicate: false, state: addrState }));
       router.push("/shop/success");
     } catch {
       setSubmitError(t("err_generic"));
@@ -463,7 +480,22 @@ export default function CheckoutPage() {
                 />
                 <LocationDatalist />
               </Field>
+              <Field label={t("state_label")}>
+                <select
+                  className={inputCls}
+                  value={addrState}
+                  onChange={(e) => setAddrState(e.target.value)}
+                  autoComplete="address-level1"
+                >
+                  {DELIVERY_STATE_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
+            {addrState !== HOME_STATE ? <TransportNote /> : null}
           </Card>
 
           <Card>
@@ -552,6 +584,9 @@ export default function CheckoutPage() {
             </div>
             <div className="mt-3 space-y-1.5 border-t border-[#E4E0CE] pt-3">
               <SumRow label={t("subtotal")} value={inr(totals.sub)} />
+              {totals.discount > 0 ? (
+                <SumRow label={t("bulk_discount")} value={`−${inr(totals.discount)}`} />
+              ) : null}
               <SumRow label={t("gst")} value={inr(totals.tax)} />
               <SumRow label={t("delivery")} value={inr(totals.delivery)} />
               {totals.cod > 0 ? <SumRow label={t("cod_fee")} value={inr(totals.cod)} /> : null}

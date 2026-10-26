@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import { Btn, Card, Loading, inr } from "../ui";
 import { useLang } from "@/lib/i18n";
+import { HOME_STATE } from "@/lib/states";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 const STORE_KEY = "tv_orders_last";
 
 type StoredOrder = { code: string; amount: number };
-type Stored = { orders: StoredOrder[]; duplicate: boolean };
+// Mission S2: the checkout passes the chosen delivery state along so
+// the transport-cost note can follow the order confirmation.
+type Stored = { orders: StoredOrder[]; duplicate: boolean; state?: string };
 
 export default function SuccessPage() {
   const { t } = useLang();
@@ -22,7 +25,11 @@ export default function SuccessPage() {
       if (raw) {
         const parsed = JSON.parse(raw) as Stored;
         if (parsed && Array.isArray(parsed.orders)) {
-          setData({ orders: parsed.orders, duplicate: parsed.duplicate === true });
+          setData({
+            orders: parsed.orders,
+            duplicate: parsed.duplicate === true,
+            state: typeof parsed.state === "string" ? parsed.state : undefined,
+          });
         }
       }
     } catch {
@@ -67,6 +74,15 @@ export default function SuccessPage() {
             <p className="pt-1 text-right text-sm font-bold text-[#1C3A2A]">
               {t("total")}: {inr(grandTotal)}
             </p>
+          </div>
+        ) : null}
+
+        {data && typeof data.state === "string" && data.state !== HOME_STATE ? (
+          // Mission S2 (scope C): transport note on the confirmation for
+          // deliveries outside the nursery's home state — informational
+          // only, the nursery confirms the cost before dispatch.
+          <div className="mt-4 rounded-2xl border border-[#E39B2D]/40 bg-[#F7F3E8] p-3 text-sm font-semibold text-[#8a5a12]">
+            🚛 {t("transport_note")}
           </div>
         ) : null}
 

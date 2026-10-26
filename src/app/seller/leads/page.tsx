@@ -3,16 +3,36 @@
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr } from "../ui";
 
+// Mission S2: leads now carry phone, pincode, state, a needed-by
+// date and a BULK / PREORDER type (pre-orders come from out-of-stock
+// products — no payment is taken, the nursery calls/WhatsApp to
+// confirm before dispatch).
 type Lead = {
   id: string;
   qty: number;
   city: string;
   company: string;
+  phone: string | null;
+  pincode: string | null;
+  state: string | null;
+  neededBy: string | null;
+  type: string;
   notes: string | null;
   status: string;
   product: { id: string; nameEn: string; category: string };
   quotes: { id: string; amount: number; status: string }[];
 };
+
+function formatNeededBy(iso: string | null): string {
+  if (!iso) {
+    return "";
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export default function SellerLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -82,14 +102,17 @@ export default function SellerLeadsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-[#1C3A2A]">Bulk quotes</h1>
+      <h1 className="text-2xl font-bold text-[#1C3A2A]">Bulk &amp; pre-order enquiries</h1>
 
       {error ? <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p> : null}
 
-      {leads.length === 0 ? <p className="text-[#1C3A2A]/60">No bulk leads yet.</p> : null}
+      {leads.length === 0 ? <p className="text-[#1C3A2A]/60">No enquiries yet.</p> : null}
 
       {leads.map((lead) => {
         const busy = busyId === lead.id;
+        const preorder = lead.type === "PREORDER";
+        const neededBy = formatNeededBy(lead.neededBy);
+        const place = [lead.city, lead.state].filter((x) => x && x.length > 0).join(", ");
 
         return (
           <Card key={lead.id}>
@@ -100,11 +123,30 @@ export default function SellerLeadsPage() {
                   {lead.qty.toLocaleString("en-IN")} × {lead.product.nameEn}
                 </p>
                 <p className="text-xs text-[#1C3A2A]/50">
-                  {lead.city} · {lead.product.category}
+                  {place}
+                  {lead.pincode ? ` · ${lead.pincode}` : ""} · {lead.product.category}
                 </p>
+                {lead.phone ? (
+                  <p className="mt-1 text-sm font-semibold text-[#1C3A2A]">
+                    📞{" "}
+                    <a className="underline" href={`tel:${lead.phone}`}>
+                      {lead.phone}
+                    </a>
+                  </p>
+                ) : null}
+                {neededBy ? <p className="text-xs font-semibold text-[#8a5a12]">🗓 Needed by {neededBy}</p> : null}
               </div>
-              <Pill tone={lead.status === "quoted" ? "green" : "amber"}>{lead.status}</Pill>
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={preorder ? "blue" : "green"}>{preorder ? "🌱 PRE-ORDER" : "🚜 BULK"}</Pill>
+                <Pill tone={lead.status === "quoted" ? "green" : "amber"}>{lead.status}</Pill>
+              </div>
             </div>
+
+            {preorder ? (
+              <p className="mt-3 rounded-xl bg-[#EDF2E6] px-3 py-2 text-xs font-semibold text-[#24562F]">
+                Pre-order — no payment taken. Call / WhatsApp the buyer to confirm availability and dates.
+              </p>
+            ) : null}
 
             {lead.notes ? (
               <p className="mt-3 rounded-xl bg-[#F7F3E8] px-3 py-2 text-sm text-[#1C3A2A]/80">{lead.notes}</p>

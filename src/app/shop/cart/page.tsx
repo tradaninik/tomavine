@@ -7,6 +7,7 @@ import { displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 import { FREE_DELIVERY_AT, computeTotals, displayPriceOf, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
+import { bulkTierFor, nextBulkTier } from "@/lib/bulk-tiers";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
@@ -94,6 +95,17 @@ export default function CartPage() {
                   const name = displayName(l.product.names, lang, l.product.nameEn);
                   const low = l.qty > l.product.stock;
                   const priceBefore = displayPriceOf(l.product, l.variantId).before;
+                  // Mission S2 (scope A1): per-line tier hint — the next
+                  // tier the qty has not reached yet ("Buy 10+, save 5%"),
+                  // or the applied badge once the top tier is reached.
+                  const appliedTier = bulkTierFor(l.qty);
+                  const upcomingTier = nextBulkTier(l.qty);
+                  const tierChip =
+                    upcomingTier !== null
+                      ? `🏷️ ${t("tier_hint", { n: upcomingTier.minQty, p: upcomingTier.pct })}`
+                      : appliedTier !== null
+                        ? `🏷️ ${t("tier_applied", { p: appliedTier.pct })}`
+                        : null;
                   return (
                     <div key={l.product.id + (l.variantId ?? "")} className="flex gap-3 py-4">
                       <ProductThumb category={l.product.category} image={l.product.image} size="sm" />
@@ -103,6 +115,9 @@ export default function CartPage() {
                         </Link>
                         {l.variant ? <p className="text-xs text-[#66735F]">{l.variant.label}</p> : null}
                         <CareChips care={l.product.care} category={l.product.category} className="mt-1.5" />
+                        {tierChip !== null && !low ? (
+                          <p className="mt-1 text-xs font-semibold text-[#24562F]">{tierChip}</p>
+                        ) : null}
                         {low ? (
                           <div className="mt-1">
                             <Pill tone="rose">{t("only_left", { n: l.product.stock })}</Pill>
@@ -137,6 +152,9 @@ export default function CartPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-bold text-[#1C3A2A]">{inr(l.lineSub)}</p>
+                        {l.lineDiscount > 0 ? (
+                          <p className="text-xs font-semibold text-[#24562F]">−{inr(l.lineDiscount)}</p>
+                        ) : null}
                         <p className="text-xs text-[#8E9A84]">
                           {priceBefore > l.unit ? (
                             <span className="line-through">{inr(priceBefore)}</span>
@@ -156,6 +174,14 @@ export default function CartPage() {
                 </span>
                 <span>
                   {t("subtotal")}: <b className="text-[#20291D]">{inr(g.sub)}</b>
+                  {g.discount > 0 ? (
+                    <>
+                      {" "}
+                      <span className="font-semibold text-[#24562F]">
+                        ({t("bulk_discount")} −{inr(g.discount)})
+                      </span>
+                    </>
+                  ) : null}
                 </span>
               </div>
             </Card>
@@ -185,6 +211,9 @@ export default function CartPage() {
             ) : null}
             <div className="mt-3 space-y-1.5">
               <SumRow label={t("subtotal")} value={inr(totals.sub)} />
+              {totals.discount > 0 ? (
+                <SumRow label={t("bulk_discount")} value={`−${inr(totals.discount)}`} />
+              ) : null}
               <SumRow label={t("gst")} value={inr(totals.tax)} />
               <SumRow label={t("delivery")} value={inr(totals.delivery)} />
               <SumRow label={t("cod_fee")} value={inr(totals.cod)} />

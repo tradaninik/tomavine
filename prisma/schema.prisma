@@ -303,14 +303,24 @@ model PlantJournal {
   entries   Json
 }
 
+// Mission S2: bulk quote requests + pre-orders. New columns are
+// nullable / defaulted so pre-S2 rows keep working. type separates a
+// classic BULK quote (in-stock, huge qty) from a PREORDER request
+// (out-of-stock line, nursery confirms by call/WhatsApp, no online
+// payment ever touches the gateway for these).
 model BulkLead {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   productId String
   qty       Int
   city      String
   company   String
+  phone     String?
+  pincode   String?
+  state     String?
+  neededBy  DateTime?
+  type      String   @default("BULK")
   notes     String?
-  status    String  @default("new")
+  status    String   @default("new")
   parts     Json?
   quotes    Quote[]
 }

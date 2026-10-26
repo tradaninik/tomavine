@@ -8,14 +8,16 @@
 // the localized name, and M2 adds the ShareRow under the CTA.
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Btn, Card, Empty, ErrBox, Field, Loading, Pill, StarRow, catEmoji, formatDate, inr, inputCls, toast } from "@/app/shop/ui";
 import { displayName, useLang } from "@/lib/i18n";
 import { deliveryEta, districtName } from "@/lib/geo";
 import { useGeo } from "@/app/shop/location";
-import { addToCart, displayPriceOf } from "@/lib/cart";
+import { addToCart, displayPriceOf, MAX_QTY } from "@/lib/cart";
+import { BULK_TIERS } from "@/lib/bulk-tiers";
+import { DELIVERY_STATE_OPTIONS, HOME_STATE, isDeliveryState } from "@/lib/states";
 import { ShareRow } from "@/components/share-row";
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
@@ -73,7 +75,15 @@ type Product = {
   reviewCount: number;
 };
 
-type Me = { name: string | null; city: string | null; pincode: string | null } | null;
+type Me = { name: string | null; phone: string | null; city: string | null; pincode: string | null } | null;
+
+function toTenDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
+  }
+  return digits.length === 10 ? digits : "";
+}
 
 function prettyKey(k: string): string {
   const spaced = k.replace(/([A-Z])/g, " $1").toLowerCase().trim();
@@ -111,9 +121,18 @@ export function ProductDetail() {
   const [leadCity, setLeadCity] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
   const [leadNotes, setLeadNotes] = useState("");
+  // Mission S2: upgraded enquiry form — phone, pincode, state,
+  // needed-by date and the BULK / PREORDER type split.
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadPincode, setLeadPincode] = useState("");
+  const [leadState, setLeadState] = useState<string>(HOME_STATE);
+  const [leadNeededBy, setLeadNeededBy] = useState("");
+  const [leadType, setLeadType] = useState<"BULK" | "PREORDER">("BULK");
   const [sending, setSending] = useState(false);
   const [leadSent, setLeadSent] = useState(false);
+  const [leadSentType, setLeadSentType] = useState<"BULK" | "PREORDER">("BULK");
   const [leadError, setLeadError] = useState("");
+  const enquiryRef = useRef<HTMLDivElement>(null);
   const { geo } = useGeo();
 
   useEffect(() => {
@@ -167,6 +186,15 @@ export function ProductDetail() {
           setMe(data.user);
           if (typeof data.user.city === "string" && data.user.city.length > 0) {
             setLeadCity(data.user.city);
+          }
+          // Mission S2: prefill the enquiry phone + pincode so the
+          // form is one tap for a logged-in buyer.
+          const digits = toTenDigits(String(data.user.phone ?? ""));
+          if (digits.length === 10) {
+            setLeadPhone(digits);
+          }
+          if (typeof data.user.pincode === "string" && data.user.pincode.length > 0) {
+            setLeadPincode(data.user.pincode);
           }
         }
       })
@@ -240,12 +268,20 @@ export function ProductDetail() {
         : t("eta_unknown");
   const etaKnown = geo !== null && eta.band !== "unknown" && (eta.band === "same" || eta.km !== null);
   const leadQtyNum = Number(leadQty);
+  const leadPhoneOk = /^(\+91)?[6-9]\d{9}$/.test(leadPhone.trim());
+  const leadPincodeOk = /^[1-9]\d{5}$/.test(leadPincode.trim());
   const leadValid =
     leadQty.trim() !== "" &&
     Number.isFinite(leadQtyNum) &&
     leadQtyNum >= 1 &&
     leadCity.trim().length >= 2 &&
-    leadCompany.trim().length >= 2;
+    leadCompany.trim().length >= 2 &&
+    leadPhoneOk &&
+    leadPincodeOk &&
+    isDeliveryState(leadState);
+  // Mission S2 (scope A1): the tier ladder for the hint chip, from
+  // the single config module — "Buy 10+, save 5% · Buy 25+, save 10%".
+  const tierHint = BULK_TIERS.map((tier) => t("tier_hint", { n: tier.minQty, p: tier.pct })).join(" · ");
 
   function handleAdd() {
     const res = addToCart(product!.id, variantId, qty);
@@ -255,6 +291,15 @@ export function ProductDetail() {
     } else if (res.reason) {
       toast(res.reason);
     }
+  }
+
+  // Mission S2 (scope B): out-of-stock products get a live Pre-order
+  // button instead of a dead Add-to-cart — it opens the same enquiry
+  // form with type=PREORDER (no payment ever touches the gateway).
+  function handlePreorder() {
+    setLeadType("PREORDER");
+    toast(t("preorder_hint"));
+    enquiryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function sendLead(e: FormEvent<HTMLFormElement>) {
@@ -275,12 +320,18 @@ export function ProductDetail() {
           city: leadCity.trim(),
           company: leadCompany.trim(),
           notes: leadNotes.trim() === "" ? undefined : leadNotes.trim(),
+          phone: leadPhone.trim(),
+          pincode: leadPincode.trim(),
+          state: leadState,
+          neededBy: leadNeededBy === "" ? undefined : leadNeededBy,
+          type: leadType,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error ?? "failed");
       }
+      setLeadSentType(leadType);
       setLeadSent(true);
     } catch {
       setLeadError(t("load_error"));
@@ -370,6 +421,10 @@ export function ProductDetail() {
               🏡 {product.nursery.name} · {product.nursery.city}
               {product.nursery.scope === "INDIA" ? " · ships across India" : ""}
             </p>
+            {isSapling ? (
+              // Mission S2 (scope C): the 7-state delivery-area line.
+              <p className="mt-1 text-xs text-[#66735F]">🚛 {t("sapling_delivery_note")}</p>
+            ) : null}
             <p className="mt-1 text-xs text-[#8E9A84]">{t("legal_eta_note")}</p>
           </div>
 
@@ -417,19 +472,30 @@ export function ProductDetail() {
                 −
               </button>
               <span className="w-10 text-center text-sm font-bold text-[#1C3A2A]">{qty}</span>
-              <button type="button" onClick={() => setQty((q) => Math.min(50, q + 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
+              <button type="button" onClick={() => setQty((q) => Math.min(MAX_QTY, q + 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
                 +
               </button>
             </div>
             <Btn onClick={handleAdd} disabled={oos} size="lg">
               🛒 {t("add_to_cart")}
             </Btn>
+            {oos ? (
+              // Mission S2 (scope B): out of stock -> live Pre-order
+              // button (opens the enquiry form with type=PREORDER).
+              <Btn onClick={handlePreorder} variant="outline" size="lg">
+                🌱 {t("preorder_cta")}
+              </Btn>
+            ) : null}
             {added ? (
               <Btn href="/shop/cart" variant="outline" size="lg">
                 {t("go_to_cart")} →
               </Btn>
             ) : null}
           </div>
+          {!oos && BULK_TIERS.length > 0 ? (
+            // Mission S2 (scope A1): tier ladder hint under the CTA.
+            <p className="text-xs font-semibold text-[#24562F]">🏷️ {tierHint}</p>
+          ) : null}
 
           <ShareRow key={product.id} title={name} text={`From ${product.nursery.name}, ${product.nursery.city}`} />
         </div>
@@ -526,55 +592,115 @@ export function ProductDetail() {
 
       {product.nursery.bulkOk ? (
         <Card className="border-[#2F6B3F]/30 bg-[#EDF2E6]/60">
-          <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
-            🚜 {t("bulk_enquiry")}
-          </h2>
-          <p className="mt-1 text-sm text-[#66735F]">{t("enquiry_s")}</p>
-          {leadSent ? (
-            <div className="mt-4 rounded-2xl border border-[#2F6B3F]/30 bg-white p-4 text-sm font-semibold text-[#24562F]">
-              ✅ {t("enquiry_sent")}
-            </div>
-          ) : meChecked && !me ? (
-            <div className="mt-4">
-              <Btn href="/login">{t("login_to_enquire")}</Btn>
-            </div>
-          ) : meChecked && me ? (
-            <form onSubmit={sendLead} className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Field label={t("qty_needed")}>
-                <input
-                  className={inputCls}
-                  type="number"
-                  min={1}
-                  value={leadQty}
-                  onChange={(e) => setLeadQty(e.target.value)}
-                  placeholder="5000"
-                />
-              </Field>
-              <Field label={t("city_label")}>
-                <input className={inputCls} value={leadCity} onChange={(e) => setLeadCity(e.target.value)} placeholder="Bengaluru" />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label={t("company")}>
-                  <input className={inputCls} value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Sunrise Agro Farms" />
-                </Field>
+          <div ref={enquiryRef}>
+            <h2 className="text-lg font-semibold text-[#20291D]" style={SERIF}>
+              🚜 {t("enquiry_title")}
+            </h2>
+            <p className="mt-1 text-sm text-[#66735F]">{t("enquiry_s2")}</p>
+            {leadSent ? (
+              <div className="mt-4 rounded-2xl border border-[#2F6B3F]/30 bg-white p-4 text-sm font-semibold text-[#24562F]">
+                ✅ {leadSentType === "PREORDER" ? t("enquiry_sent_preorder") : t("enquiry_sent")}
               </div>
-              <div className="sm:col-span-2">
-                <Field label={t("notes_opt")}>
-                  <textarea className={inputCls} rows={3} value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} />
-                </Field>
+            ) : meChecked && !me ? (
+              <div className="mt-4">
+                <Btn href="/login">{t("login_to_enquire")}</Btn>
               </div>
-              {leadError ? (
+            ) : meChecked && me ? (
+              <form onSubmit={sendLead} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <ErrBox>{leadError}</ErrBox>
+                  <Field label={t("enquiry_type")}>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLeadType("BULK")}
+                        className={
+                          leadType === "BULK"
+                            ? "rounded-full border-2 border-[#2F6B3F] bg-[#EDF2E6] px-4 py-2 text-sm font-semibold text-[#24562F]"
+                            : "rounded-full border border-[#D6D2BC] bg-white px-4 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#2F6B3F]/50"
+                        }
+                      >
+                        🚜 {t("type_bulk")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeadType("PREORDER")}
+                        className={
+                          leadType === "PREORDER"
+                            ? "rounded-full border-2 border-[#2F6B3F] bg-[#EDF2E6] px-4 py-2 text-sm font-semibold text-[#24562F]"
+                            : "rounded-full border border-[#D6D2BC] bg-white px-4 py-2 text-sm font-semibold text-[#66735F] transition hover:border-[#2F6B3F]/50"
+                        }
+                      >
+                        🌱 {t("type_preorder")}
+                      </button>
+                    </div>
+                  </Field>
                 </div>
-              ) : null}
-              <div className="sm:col-span-2">
-                <Btn type="submit" disabled={sending || !leadValid}>
-                  {sending ? "…" : t("send_enquiry")}
-                </Btn>
-              </div>
-            </form>
-          ) : null}
+                <Field label={t("qty_needed")}>
+                  <input
+                    className={inputCls}
+                    type="number"
+                    min={1}
+                    value={leadQty}
+                    onChange={(e) => setLeadQty(e.target.value)}
+                    placeholder={leadType === "PREORDER" ? "10" : "5000"}
+                  />
+                </Field>
+                <Field label={t("city_label")}>
+                  <input className={inputCls} value={leadCity} onChange={(e) => setLeadCity(e.target.value)} placeholder="Bengaluru" />
+                </Field>
+                <Field label={t("phone")} hint={t("phone_hint")}>
+                  <input
+                    className={inputCls}
+                    value={leadPhone}
+                    onChange={(e) => setLeadPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    placeholder="9876543210"
+                  />
+                </Field>
+                <Field label={t("pincode")}>
+                  <input
+                    className={inputCls}
+                    value={leadPincode}
+                    onChange={(e) => setLeadPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    placeholder="560001"
+                  />
+                </Field>
+                <Field label={t("state_label")}>
+                  <select className={inputCls} value={leadState} onChange={(e) => setLeadState(e.target.value)}>
+                    {DELIVERY_STATE_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t("needed_by")}>
+                  <input className={inputCls} type="date" value={leadNeededBy} onChange={(e) => setLeadNeededBy(e.target.value)} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label={t("company")}>
+                    <input className={inputCls} value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} placeholder="Sunrise Agro Farms" />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label={t("notes_opt")}>
+                    <textarea className={inputCls} rows={3} value={leadNotes} onChange={(e) => setLeadNotes(e.target.value)} />
+                  </Field>
+                </div>
+                {leadError ? (
+                  <div className="sm:col-span-2">
+                    <ErrBox>{leadError}</ErrBox>
+                  </div>
+                ) : null}
+                <div className="sm:col-span-2">
+                  <Btn type="submit" disabled={sending || !leadValid}>
+                    {sending ? "…" : t("send_enquiry")}
+                  </Btn>
+                </div>
+              </form>
+            ) : null}
+          </div>
         </Card>
       ) : null}
     </div>

@@ -8,6 +8,7 @@ import { Btn, Card, CareChips, ErrBox, Loading, StarRow, catEmoji, formatDate, f
 import { displayName, useLang } from "@/lib/i18n";
 import { readTrustMeta, formatPromisedDay, localeForLang } from "@/lib/trust";
 import { careChips } from "@/lib/care";
+import { HOME_STATE } from "@/lib/states";
 
 const STATUS_KEYS: Record<string, string> = {
   PENDING: "st_pending",
@@ -278,6 +279,11 @@ export default function OrderDetailPage() {
   const aPhone = addressField(order.address, "phone");
   const aCity = addressField(order.address, "city");
   const aPin = addressField(order.address, "pincode");
+  // Mission S2 (scope C): state on the address JSON — shown with the
+  // city and, when it is not the nursery's home state, the transport
+  // note rides on the order confirmation (informational only).
+  const aState = addressField(order.address, "state");
+  const outsideHomeState = aState.length > 0 && aState !== HOME_STATE;
   const trust = readTrustMeta(order.meta);
   const codFee =
     order.payment?.method === "cod"
@@ -419,13 +425,20 @@ export default function OrderDetailPage() {
               {lines.map((line) => (
                 <p key={line}>{line}</p>
               ))}
-              {aCity || aPin ? (
+              {aCity || aState || aPin ? (
                 <p>
-                  {[aCity, aPin].filter((s) => s.length > 0).join(" – ")}
+                  {[[aCity, aState].filter((s) => s.length > 0).join(", "), aPin]
+                    .filter((s) => s.length > 0)
+                    .join(" – ")}
                 </p>
               ) : null}
               {aPhone ? <p className="mt-1">📞 {aPhone}</p> : null}
             </div>
+            {outsideHomeState ? (
+              <div className="mt-3 rounded-2xl border border-[#E39B2D]/40 bg-[#F7F3E8] p-3 text-sm font-semibold text-[#8a5a12]">
+                🚛 {t("transport_note")}
+              </div>
+            ) : null}
           </Card>
         ) : null}
 

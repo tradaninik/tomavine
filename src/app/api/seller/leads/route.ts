@@ -34,6 +34,11 @@ export async function GET() {
       qty: l.qty,
       city: l.city,
       company: l.company,
+      phone: l.phone,
+      pincode: l.pincode,
+      state: l.state,
+      neededBy: l.neededBy,
+      type: l.type,
       notes: l.notes,
       status: l.status,
       product: productById.get(l.productId) ?? {

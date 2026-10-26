@@ -1,12 +1,16 @@
 "use client";
 
 import { LEGACY_SUPPLY_CATEGORIES, legacyTaxRateFor, resolveRate } from "@/lib/category-gst";
+import { MAX_QTY as BULK_MAX_QTY, bulkDiscountFor } from "@/lib/bulk-tiers";
 
 // ─────────────────────────────────────────────────────────────
 // Tomavine customer cart (storefront).
 // Pricing here mirrors src/app/api/orders/route.ts EXACTLY:
 //   - unit = selected variant price, else priceMin
 //   - active rescue listing -> Math.round(unit * (1 - pct / 100))
+//   - bulk tier discount (mission S2): per-line quantity tiers from
+//     lib/bulk-tiers.ts (10+ = 5%, 25+ = 10%), discount on the line
+//     subtotal, GST on the POST-discount value, whole-rupee rounding
 //   - GST resolves from the Category tree (lib/category-gst.ts):
 //     the server puts the resolved whole percent on ProductCard.gstRate
 //     (node rate, else parent top's, 5 floor when mapped — the same
@@ -15,7 +19,8 @@ import { LEGACY_SUPPLY_CATEGORIES, legacyTaxRateFor, resolveRate } from "@/lib/c
 //     — plants & saplings are live plants, HSN 0601 -> 5%). The
 //     legacy rule stays the fallback so display can never disagree
 //     with the charge.
-//   - delivery per nursery group: ₹0 on PICKUP, ₹0 at ₹499+, else ₹49
+//   - delivery per nursery group: ₹0 on PICKUP, ₹0 at ₹499+ (raw
+//     subtotal, before the bulk discount), else ₹49
 //   - ₹25 COD fee per order (per nursery group)
 // Rule: only call loadCart()/saveCart() inside useEffect or event
 // handlers — never during render (SSR has no localStorage).
@@ -60,6 +65,7 @@ export type CartGroupLine = {
   qty: number;
   unit: number;
   lineSub: number;
+  lineDiscount: number;
   lineTax: number;
 };
 
@@ -70,6 +76,7 @@ export type CartGroup = {
   nurseryCity: string;
   lines: CartGroupLine[];
   sub: number;
+  discount: number;
   tax: number;
   deliveryFee: number;
   codFee: number;
@@ -80,6 +87,7 @@ export type CartTotals = {
   groups: CartGroup[];
   orderCount: number;
   sub: number;
+  discount: number;
   tax: number;
   delivery: number;
   cod: number;
@@ -95,7 +103,9 @@ export type AddResult = {
 export const CART_KEY = "tomavine_cart_v1";
 export const CART_EVENT = "tomavine:cart";
 export const MAX_LINES = 20;
-export const MAX_QTY = 50;
+// Mission S2: raised from 50 to 500 so bulk tier orders (10+ / 25+)
+// can be placed online. Single source of truth is lib/bulk-tiers.ts.
+export const MAX_QTY = BULK_MAX_QTY;
 // Supply goods attract 18% GST; everything else (plants, saplings,
 // inputs) is 5%. Saplings are live plants, HSN 0601 -> 5%.
 // Retained for backwards compatibility; the canonical copy lives in
@@ -267,7 +277,11 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
     const variant = variantOf(product, line.variantId);
     const unit = unitPriceOf(product, line.variantId);
     const lineSub = unit * line.qty;
-    const lineTax = Math.round(lineSub * resolveRate(product));
+    // Mission S2 (scope A1): auto tier discount per line — same math
+    // as api/orders (Math.round(lineSub * pct/100)); GST then applies
+    // on the post-discount value so display == charge.
+    const lineDiscount = bulkDiscountFor(unit, line.qty);
+    const lineTax = Math.round((lineSub - lineDiscount) * resolveRate(product));
     let group = groups.get(product.nurseryId);
     if (!group) {
       group = {
@@ -277,6 +291,7 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
         nurseryCity: product.nurseryCity,
         lines: [],
         sub: 0,
+        discount: 0,
         tax: 0,
         deliveryFee: 0,
         codFee: 0,
@@ -284,12 +299,14 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
       };
       groups.set(product.nurseryId, group);
     }
-    group.lines.push({ product: product, variant: variant, variantId: line.variantId, qty: line.qty, unit: unit, lineSub: lineSub, lineTax: lineTax });
+    group.lines.push({ product: product, variant: variant, variantId: line.variantId, qty: line.qty, unit: unit, lineSub: lineSub, lineDiscount: lineDiscount, lineTax: lineTax });
     group.sub += lineSub;
+    group.discount += lineDiscount;
     group.tax += lineTax;
   }
 
   let sub = 0;
+  let discount = 0;
   let tax = 0;
   let delivery = 0;
   let cod = 0;
@@ -302,8 +319,9 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
       group.deliveryFee = DELIVERY_FEE;
     }
     group.codFee = payMethod === "cod" ? COD_FEE : 0;
-    group.total = group.sub + group.deliveryFee + group.tax + group.codFee;
+    group.total = group.sub - group.discount + group.deliveryFee + group.tax + group.codFee;
     sub += group.sub;
+    discount += group.discount;
     tax += group.tax;
     delivery += group.deliveryFee;
     cod += group.codFee;
@@ -314,10 +332,11 @@ export function computeTotals(lines: CartLine[], products: CartProduct[], mode: 
     groups: list,
     orderCount: list.length,
     sub: sub,
+    discount: discount,
     tax: tax,
     delivery: delivery,
     cod: cod,
-    total: sub + tax + delivery + cod,
+    total: sub - discount + tax + delivery + cod,
   };
 }
 
