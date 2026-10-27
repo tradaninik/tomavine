@@ -25,6 +25,7 @@ if (produced.length !== 1) {
   process.exit(1);
 }
 
+produced[0] = produced[0].split(/[\\/]/).pop();
 const finalName = "tomavine-s3.patch";
 renameSync(join(outDir, produced[0]), join(outDir, finalName));
 const buf = readFileSync(join(outDir, finalName));

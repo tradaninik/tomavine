@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
+import { isLeadStatus } from "@/lib/quote";
 
 export async function GET() {
   const auth = await requireNursery();
@@ -55,7 +56,12 @@ export async function GET() {
       quotes: l.quotes.map((q) => ({
         id: q.id,
         amount: q.amount,
+        total: q.total,
+        transport: q.transport,
         status: q.status,
+        validUntil: q.validUntil,
+        token: q.token,
+        createdAt: q.createdAt,
       })),
     })),
   });
@@ -118,6 +124,73 @@ export async function POST(request: Request) {
   await db.bulkLead.update({
     where: { id: lead.id },
     data: { status: "quoted" },
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
+// Mission S4: lead pipeline. Sellers move a lead along
+// new -> contacted -> quoted -> won / lost. "quoted" is also set
+// automatically when a quotation is sent and "won" when the buyer
+// accepts it on the public quote page.
+export async function PATCH(request: Request) {
+  const auth = await requireNursery();
+
+  if (!auth) {
+    return NextResponse.json({ error: "Seller login required" }, { status: 401 });
+  }
+
+  const { nursery, session } = auth;
+
+  let body: { leadId?: string; status?: string };
+
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const leadId = typeof body.leadId === "string" ? body.leadId : "";
+  const status = typeof body.status === "string" ? body.status : "";
+
+  if (!leadId) {
+    return NextResponse.json({ error: "Missing lead id" }, { status: 400 });
+  }
+
+  if (!isLeadStatus(status)) {
+    return NextResponse.json({ error: "Unknown status" }, { status: 400 });
+  }
+
+  const ownProducts = await db.product.findMany({
+    where: { nurseryId: nursery.id },
+    select: { id: true },
+  });
+
+  const lead = await db.bulkLead.findFirst({
+    where: {
+      OR: [
+        { id: leadId, productId: { in: ownProducts.map((p) => p.id) } },
+        { id: leadId, type: "RFQ" },
+      ],
+    },
+  });
+
+  if (!lead) {
+    return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  }
+
+  await db.bulkLead.update({
+    where: { id: lead.id },
+    data: { status: status },
+  });
+
+  await db.auditLog.create({
+    data: {
+      actorId: String(session.payload.sub),
+      action: "lead.status",
+      entity: "BulkLead:" + lead.id,
+      meta: { from: lead.status, to: status, source: "seller" },
+    },
   });
 
   return NextResponse.json({ ok: true });

@@ -327,14 +327,26 @@ model BulkLead {
   quotes    Quote[]
 }
 
+// Mission S4: quotations with line items, transport, a validity date
+// and a public token link (/quote/<token>). Legacy single-amount
+// quotes keep working: items stay null, total 0, and readers fall
+// back to amount (quoteTotalOf in src/lib/quote.ts).
 model Quote {
-  id        String   @id @default(cuid())
-  leadId    String
-  lead      BulkLead @relation(fields: [leadId], references: [id])
-  nurseryId String
-  nursery   Nursery  @relation(fields: [nurseryId], references: [id])
-  amount    Int
-  status    String   @default("sent")
+  id         String    @id @default(cuid())
+  leadId     String
+  lead       BulkLead  @relation(fields: [leadId], references: [id])
+  nurseryId  String
+  nursery    Nursery   @relation(fields: [nurseryId], references: [id])
+  amount     Int
+  status     String    @default("sent")
+  items      Json?
+  transport  Int       @default(0)
+  total      Int       @default(0)
+  validUntil DateTime?
+  token      String?   @unique
+  note       String?
+  createdAt  DateTime  @default(now())
+  viewedAt   DateTime?
 }
 
 model OtpCode {

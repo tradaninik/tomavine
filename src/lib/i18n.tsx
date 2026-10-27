@@ -8,6 +8,7 @@ import { DICT_PC } from "./i18n-pc";
 import { DICT_M2 } from "./i18n-m2";
 import { DICT_S2 } from "./i18n-s2";
 import { DICT_S3 } from "./i18n-s3";
+import { DICT_S4 } from "./i18n-s4";
 
 // ─────────────────────────────────────────────────────────────
 // Tomavine language layer (storefront).
@@ -312,6 +313,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.en,
     ...DICT_S2.en,
     ...DICT_S3.en,
+    ...DICT_S4.en,
   },
   hi: {
     hero_eyebrow: "नर्सरी की हर ज़रूरत, एक जगह",
@@ -595,6 +597,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.hi,
     ...DICT_S2.hi,
     ...DICT_S3.hi,
+    ...DICT_S4.hi,
   },
   te: {
     hero_eyebrow: "నర్సరీ అవసరాలన్నీ ఒకే చోట",
@@ -878,6 +881,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.te,
     ...DICT_S2.te,
     ...DICT_S3.te,
+    ...DICT_S4.te,
   },
   kn: {
     hero_eyebrow: "ನರ್ಸರಿಯ ಎಲ್ಲ ಅಗತ್ಯಗಳು ಒಂದೇ ಕಡೆ",
@@ -1161,6 +1165,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.kn,
     ...DICT_S2.kn,
     ...DICT_S3.kn,
+    ...DICT_S4.kn,
   },
   ta: {
     hero_eyebrow: "நர்சரி தேவைகள் அனைத்தும் ஒரே இடத்தில்",
@@ -1444,6 +1449,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.ta,
     ...DICT_S2.ta,
     ...DICT_S3.ta,
+    ...DICT_S4.ta,
   },
   mr: {
     hero_eyebrow: "नर्सरीच्या सर्व गरजा एकाच ठिकाणी",
@@ -1727,6 +1733,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     ...DICT_M2.mr,
     ...DICT_S2.mr,
     ...DICT_S3.mr,
+    ...DICT_S4.mr,
   },
 };
 
