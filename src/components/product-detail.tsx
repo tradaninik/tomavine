@@ -70,6 +70,7 @@ type Product = {
   priceMin: number;
   mrp: number;
   stock: number;
+  moq?: number | null;
   image: string | null;
   nursery: Nursery;
   variants: Variant[];
@@ -473,6 +474,9 @@ export function ProductDetail() {
             )}
           </div>
           <p className="text-xs text-[#66735F]">{t("legal_product_note")}</p>
+          {typeof product.moq === "number" && product.moq > 0 ? (
+            <p className="text-xs font-bold text-[#2F6B3F]">{t("s6_moq_line", { n: product.moq })}</p>
+          ) : null}
 
           {product.variants.length > 0 ? (
             <div className="space-y-2">
