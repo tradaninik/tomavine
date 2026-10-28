@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 import { rateFromNodeChain } from "@/lib/category-gst";
 
 // ─────────────────────────────────────────────────────────────
@@ -39,6 +40,10 @@ export type ProductCard = {
   // config — it is exactly what the storefront must respect.
   nurseryFeatures: unknown;
   variants: ProductVariantCard[];
+  // Mission S6-B: minimum order quantity for bulk listings; null or
+  // 1 means "no minimum beyond the usual one". Carried on every
+  // ProductCard so cart/checkout can enforce it client-side.
+  moq: number | null;
   rescue: { pct: number; expiresAt: string } | null;
   avgStars: number;
   reviewCount: number;
@@ -96,9 +101,47 @@ export function productCard(p: ProductWithRelations): ProductCard {
     nurseryCity: p.nursery.city,
     nurseryFeatures: p.nursery.features,
     variants: p.variants.map((v) => ({ id: v.id, label: v.label, price: v.price })),
+    moq: p.moq,
     rescue: rescue,
     avgStars: avgStars,
     reviewCount: reviewCount,
     gstRate: rateFromNodeChain(p.categoryNode),
   };
+}
+
+// -------------------------------------------------------------
+// Mission S6-B: bulk-first pivot. Categories the owner parked
+// (active = false - ornamental plants, decor, gifts and the retail
+// pot subs) disappear from every UNFILTERED product listing: the
+// homepage grid, search, the advisor and the RFQ product picker.
+// Resolution mirrors applyCategorySlugFilter: a product belongs to
+// a parked category when its categoryId sits anywhere in that
+// top's subtree, OR (legacy rows with categoryId null) when its
+// category string equals the parked top's legacyKey. Returns null
+// when nothing is parked, so the common case adds no WHERE clause.
+// Direct product links (/shop/product/<id>) keep working on
+// purpose - old WhatsApp links must not break; parked items just
+// stop being LISTED.
+// -------------------------------------------------------------
+export async function hiddenCategoryWhere(): Promise<Prisma.ProductWhereInput | null> {
+  const parked = await db.category.findMany({
+    where: { active: false },
+    select: { id: true, parentId: true, legacyKey: true, children: { select: { id: true } } },
+  });
+  if (parked.length === 0) {
+    return null;
+  }
+  const ids: string[] = [];
+  const legacyKeys: string[] = [];
+  for (const row of parked) {
+    ids.push(row.id, ...row.children.map((c) => c.id));
+    if (row.parentId === null && row.legacyKey !== null) {
+      legacyKeys.push(row.legacyKey);
+    }
+  }
+  const and: Prisma.ProductWhereInput[] = [{ categoryId: { notIn: ids } }];
+  if (legacyKeys.length > 0) {
+    and.push({ category: { notIn: legacyKeys } });
+  }
+  return { AND: and };
 }

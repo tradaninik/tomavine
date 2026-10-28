@@ -30,7 +30,7 @@ function ok(name, cond, detail) {
 }
 
 function note(name) {
-  console.log("NOTE  " + name + " (skipped - run node scripts/s6-seed.mjs to reset)");
+  console.log("NOTE  " + name + " (skipped - to reset safely run node scripts/s6-seed.mjs THEN node scripts/s6b-seed.mjs)");
 }
 
 async function probe(method, path, body) {
@@ -280,16 +280,18 @@ if (q2now !== null && q2now.status === "accepted" && e2eTrackToken !== null) {
 }
 
 const q1 = await prisma.quote.findUnique({ where: { token: "demo-quote-bulk-01" } });
-ok(
-  "demo-quote-bulk-01 still awaits YOUR click (status sent)",
-  q1 !== null && q1.status === "sent",
-  "status " + (q1 ? q1.status : "null"),
-);
+if (q1 === null) {
+  note("demo-quote-bulk-01 missing - affordance check skipped");
+} else if (q1.status === "sent" || q1.status === "viewed") {
+  ok("demo-quote-bulk-01 still awaits YOUR accept click (sent or viewed)", true, "status " + q1.status);
+} else {
+  note("demo-quote-bulk-01 already " + q1.status + " - affordance consumed");
+}
 
 const moqCount = await prisma.product.count({
   where: { nursery: { slug: { in: ["kaveri-agri-demo", "godavari-bio-demo"] } }, moq: { not: null } },
 });
-ok("demo products carry moq values", moqCount === 10, "found " + moqCount);
+ok("demo products carry moq values (at least 10)", moqCount >= 10, "found " + moqCount);
 
 // ---------------------------------------------------------------
 console.log("");

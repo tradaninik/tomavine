@@ -174,6 +174,12 @@ export function ProductDetail() {
       .then((data) => {
         if (active && data && data.product) {
           setProduct(data.product);
+          // Mission S6-B: bulk listings start the qty stepper at
+          // their minimum order quantity, never below it.
+          const m = data.product.moq;
+          if (typeof m === "number" && m > 1) {
+            setQty((q) => Math.max(q, m));
+          }
           setVariantId(data.product.variants.length > 0 ? data.product.variants[0].id : null);
         }
       })
@@ -501,7 +507,7 @@ export function ProductDetail() {
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center rounded-xl border border-[#D6D2BC] bg-white">
-              <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
+              <button type="button" onClick={() => setQty((q) => Math.max(product !== null && typeof product.moq === "number" && product.moq > 1 ? product.moq : 1, q - 1))} className="h-10 w-10 text-lg font-bold text-[#1C3A2A]">
                 −
               </button>
               <span className="w-10 text-center text-sm font-bold text-[#1C3A2A]">{qty}</span>

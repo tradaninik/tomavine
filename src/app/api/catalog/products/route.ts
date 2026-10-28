@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { PUBLIC_PRODUCT_INCLUDE, productCard, publicProductWhere } from "@/lib/catalog";
+import { PUBLIC_PRODUCT_INCLUDE, hiddenCategoryWhere, productCard, publicProductWhere } from "@/lib/catalog";
 
 // `cat=<slug>` — a Category-tree slug (top OR sub). Resolved to
 // node ids server-side: a top matches its whole subtree (its own
@@ -57,6 +57,16 @@ export async function GET(req: Request) {
     if (withCat === null) {
       return NextResponse.json({ products: [] });
     }
+  }
+
+  // Mission S6-B: parked (inactive) categories never appear in ANY
+  // listing - the homepage grid, search, the advisor-driven picks
+  // and the ids lookup the cart/checkout pages use (a parked product
+  // sitting in a stale cart shows up as unavailable, which is exactly
+  // the pivot behavior we want - it must be removed before checkout).
+  const hidden = await hiddenCategoryWhere();
+  if (hidden !== null) {
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : []), hidden];
   }
 
   if (category) {

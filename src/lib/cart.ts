@@ -52,6 +52,9 @@ export type CartProduct = {
   nurserySlug: string;
   nurseryCity: string;
   variants: CartVariant[];
+  // Mission S6-B: minimum order quantity as sent by the catalog API
+  // (null/1 = no minimum). Cart + checkout enforce it client-side.
+  moq?: number | null;
   rescue: { pct: number; expiresAt: string } | null;
   // GST whole percent resolved server-side from the Category tree
   // (null = unmapped → legacy string fallback). See lib/category-gst.ts.
@@ -350,5 +353,16 @@ export function overStockLines(lines: CartLine[], products: CartProduct[]): Cart
   return lines.filter((l) => {
     const p = byId.get(l.productId);
     return p ? l.qty > p.stock : false;
+  });
+}
+
+// Mission S6-B: lines under their product's minimum order quantity.
+// The cart page shows a pill per line and blocks the checkout link;
+// the checkout page blocks submit; the server rejects with 400 moq.
+export function belowMoqLines(lines: CartLine[], products: CartProduct[]): CartLine[] {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  return lines.filter((l) => {
+    const p = byId.get(l.productId);
+    return p ? typeof p.moq === "number" && p.moq > 1 && l.qty < p.moq : false;
   });
 }

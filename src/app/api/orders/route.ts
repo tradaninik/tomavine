@@ -68,6 +68,12 @@ export async function POST(req: Request) {
     const prod = products.find(x => x.id === it.productId)!;
     if (prod.nursery.status !== "VERIFIED" || !prod.nursery.retailOk)
       return NextResponse.json({ error: "nursery_unavailable" }, { status: 400 });
+    // Mission S6-B: server-side MOQ enforcement. The cart, checkout
+    // and product pages mirror this client-side, but the server is
+    // authoritative - same stance as the maxQty check above.
+    if (typeof prod.moq === "number" && prod.moq > 1 && it.qty < prod.moq) {
+      return NextResponse.json({ error: "moq", item: prod.nameEn, moq: prod.moq }, { status: 400 });
+    }
     const v = prod.variants.find(v => v.id === it.variantId) ?? prod.variants[0] ?? null;
     let unit = v ? v.price : prod.priceMin;
     if (prod.rescue && prod.rescue.expiresAt > new Date()) unit = Math.round(unit * (1 - prod.rescue.pct / 100));

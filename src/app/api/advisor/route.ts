@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { classify, seasonsForMonth, SOIL_CHOICES, type AdvisorCandidate, type SoilChoice } from "@/lib/advisor";
+import { hiddenCategoryWhere } from "@/lib/catalog";
 
 // GET /api/advisor?month=10&soil=loamy&city=Hyderabad — public, read-only.
 export async function GET(req: Request) {
@@ -11,8 +12,9 @@ export async function GET(req: Request) {
   const soil = (SOIL_CHOICES as string[]).includes(soilParam) ? (soilParam as SoilChoice) : "unsure";
   const city = (sp.get("city") ?? "").slice(0, 60);
 
+  const hidden = await hiddenCategoryWhere();
   const rows = await db.product.findMany({
-    where: { hidden: false },
+    where: { hidden: false, ...(hidden === null ? {} : hidden) },
     select: {
       id: true, nameEn: true, names: true, category: true, priceMin: true, mrp: true,
       stock: true, image: true, care: true, agri: true,

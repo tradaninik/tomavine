@@ -47,6 +47,7 @@ export function resolveSlug(tree: CategoryTree, slug: string): ResolvedCategory 
 const PHOTO_BY_SLUG: Record<string, string> = {
   plants: "/photos/cat-plants.jpg",
   saplings: "/photos/cat-saplings.jpg",
+  irrigation: "/photos/hero-farm.jpg",
   inputs: "/photos/cat-inputs.jpg",
   pots: "/photos/cat-pots.jpg",
   tools: "/photos/cat-tools.jpg",

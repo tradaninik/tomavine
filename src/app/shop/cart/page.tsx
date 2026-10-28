@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Btn, Card, CareChips, Empty, Loading, Pill, ProductThumb, SectionTitle, inr, toast } from "../ui";
 import { displayName, useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
-import { FREE_DELIVERY_AT, computeTotals, displayPriceOf, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
+import { FREE_DELIVERY_AT, belowMoqLines, computeTotals, displayPriceOf, loadCart, missingLines, removeLine, setQty } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
 import { bulkTierFor, nextBulkTier } from "@/lib/bulk-tiers";
 
@@ -59,6 +59,8 @@ export default function CartPage() {
   }, []);
 
   const missing = missingLines(lines, products);
+  // Mission S6-B: lines under their MOQ block checkout.
+  const belowMoq = belowMoqLines(lines, products);
   const totals = computeTotals(lines, products, "DELIVERY", "cod", tiers === null ? undefined : { tiers: tiers });
 
   function changeQty(productId: string, variantId: string | null, qty: number) {
@@ -80,7 +82,7 @@ export default function CartPage() {
         emoji="🛒"
         title={t("cart_empty")}
         text={t("cart_empty_s")}
-        action={<Btn href="/shop/c/plants">{t("browse")}</Btn>}
+        action={<Btn href="/shop/c/saplings">{t("browse")}</Btn>}
       />
     );
   }
@@ -134,6 +136,11 @@ export default function CartPage() {
                         {low ? (
                           <div className="mt-1">
                             <Pill tone="rose">{t("only_left", { n: l.product.stock })}</Pill>
+                          </div>
+                        ) : null}
+                        {typeof l.product.moq === "number" && l.product.moq > 1 && l.qty < l.product.moq ? (
+                          <div className="mt-1">
+                            <Pill tone="rose">{t("s7_moq_below", { n: l.product.moq })}</Pill>
                           </div>
                         ) : null}
                         <div className="mt-2 flex items-center gap-3">
@@ -235,10 +242,10 @@ export default function CartPage() {
               <span>{t("total")}</span>
               <span>{inr(totals.total)}</span>
             </div>
-            <Btn href="/shop/checkout" disabled={missing.length > 0} size="lg" className="mt-4 w-full">
+            <Btn href="/shop/checkout" disabled={missing.length > 0 || belowMoq.length > 0} size="lg" className="mt-4 w-full">
               {t("checkout")} →
             </Btn>
-            <Btn href="/shop/c/plants" variant="ghost" size="sm" className="mt-2 w-full">
+            <Btn href="/shop/c/saplings" variant="ghost" size="sm" className="mt-2 w-full">
               {t("continue_shopping")}
             </Btn>
           </Card>

@@ -18,15 +18,15 @@ const body = Karla({ subsets: ["latin"], variable: "--font-body" });
 
 const SERIF = { fontFamily: "var(--font-display), Georgia, serif" };
 
-// Fallback tiles when the category tree API is empty/unreachable —
-// the home page never goes blank. The 5 legacy keys equal their
-// tree slugs, so these links match the primary /shop/c/* route.
+// Fallback tiles when the category tree API is empty/unreachable -
+// the home page never goes blank. Mission S6-B: bulk-first five;
+// three reuse legacy keys, irrigation + seeds use DICT_S7 keys.
 const CATS = [
-  { href: "/shop/c/saplings", key: "saplings", emoji: "🌾", img: "/photos/cat-saplings.jpg" },
-  { href: "/shop/c/plants", key: "plants", emoji: "🪴", img: "/photos/cat-plants.jpg" },
-  { href: "/shop/c/inputs", key: "inputs", emoji: "🧪", img: "/photos/cat-inputs.jpg" },
-  { href: "/shop/c/pots", key: "pots", emoji: "🏺", img: "/photos/cat-pots.jpg" },
-  { href: "/shop/c/tools", key: "tools", emoji: "🛠️", img: "/photos/cat-tools.jpg" },
+  { href: "/shop/c/saplings", key: "saplings", img: "/photos/cat-saplings.jpg" },
+  { href: "/shop/c/irrigation", key: "s7_cat_irrigation", img: "/photos/hero-farm.jpg" },
+  { href: "/shop/c/inputs", key: "inputs", img: "/photos/cat-inputs.jpg" },
+  { href: "/shop/c/seeds", key: "s7_cat_seeds", img: "/photos/cat-saplings.jpg" },
+  { href: "/shop/c/tools", key: "tools", img: "/photos/cat-tools.jpg" },
 ];
 
 type NurseryCard = {
@@ -241,12 +241,12 @@ function Landing() {
           <div className="grid gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-14">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full bg-[#EDF2E6] px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[#2F6B3F]">
-                <span aria-hidden="true">🌿</span> {t("hero_eyebrow")}
+                <span aria-hidden="true">🌿</span> {t("s7_hero_eyebrow")}
               </p>
               <h1 className="mt-5 max-w-2xl text-4xl leading-[1.08] font-semibold tracking-tight text-[#20291D] sm:text-5xl" style={SERIF}>
-                {t("hero_t")}
+                {t("s7_hero_t")}
               </h1>
-              <p className="mt-4 max-w-2xl text-base text-[#66735F] sm:text-lg">{t("hero_s")}</p>
+              <p className="mt-4 max-w-2xl text-base text-[#66735F] sm:text-lg">{t("s7_hero_s")}</p>
 
               <form onSubmit={submitSearch} className="mt-8 flex max-w-xl items-center gap-2 rounded-2xl border border-[#D6D2BC] bg-white p-2 pl-4 shadow-sm">
                 <span aria-hidden="true" className="text-[#8E9A84]">
@@ -269,23 +269,23 @@ function Landing() {
                   <span aria-hidden="true">🛡️</span> {t("trust_verified")}
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <span aria-hidden="true">💵</span> {t("trust_cod")}
+                  <span aria-hidden="true">💵</span> {t("s7_trust_advance")}
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <span aria-hidden="true">🚚</span> {t("trust_delivery")}
+                  <span aria-hidden="true">🚚</span> {t("s7_trust_track")}
                 </span>
               </div>
             </div>
 
             <div className="relative mx-auto w-full max-w-md pb-10 lg:max-w-none lg:pb-8">
               <img
-                src="/photos/hero-terrace.jpg"
-                alt="Terrace garden with grow bags full of vegetables"
+                src="/photos/hero-farm.jpg"
+                alt="Drip-irrigated vegetable field on a partner farm"
                 className="aspect-[4/3] w-full rounded-3xl object-cover shadow-xl"
               />
               <img
-                src="/photos/hero-farm.jpg"
-                alt="Farmer planting seedlings in a field"
+                src="/photos/hero-terrace.jpg"
+                alt="Saplings in trays at a verified nursery"
                 className="absolute -top-6 -right-3 hidden w-36 rotate-3 rounded-2xl border-4 border-white object-cover shadow-lg sm:block lg:-right-6 lg:w-44"
               />
               <img
@@ -360,9 +360,9 @@ function Landing() {
           <section className="mx-auto max-w-6xl px-4 py-8">
             <div className="mb-5 flex items-end justify-between gap-3">
               <h2 className="text-xl font-semibold text-[#20291D] sm:text-2xl" style={SERIF}>
-                {t("fresh")}
+                {t("s7_home_picks")}
               </h2>
-              <Link href="/shop/c/plants" className="text-sm font-bold text-[#2F6B3F] hover:underline">
+              <Link href="/shop/c/saplings" className="text-sm font-bold text-[#2F6B3F] hover:underline">
                 {t("view_all")} →
               </Link>
             </div>
@@ -373,20 +373,6 @@ function Landing() {
             </div>
           </section>
         ) : null}
-
-        <section className="mx-auto max-w-6xl px-4 py-8">
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-[#1C3A2A] p-8 text-[#F7F3E8]">
-            <div>
-              <p className="text-2xl font-semibold" style={SERIF}>
-                🏷️ {t("rescue")}
-              </p>
-              <p className="mt-2 max-w-lg text-sm text-[#F7F3E8]/70">{t("rescue_pitch")}</p>
-            </div>
-            <Btn href="/shop/rescue" size="lg">
-              {t("rescue")} →
-            </Btn>
-          </div>
-        </section>
 
         {nurseries.length > 0 ? (
           <section className="mx-auto max-w-6xl px-4 py-8">
@@ -446,8 +432,8 @@ function Landing() {
         <p className="text-base font-semibold text-[#F7F3E8]" style={SERIF}>
           🌱 Tomavine
         </p>
-        <p className="mt-1">Where growers meet gardens</p>
-        <p className="mt-1 text-xs">Cash on delivery · From physically verified nurseries</p>
+        <p className="mt-1">Bulk farm supply, verified at source</p>
+        <p className="mt-1 text-xs">UPI advance - balance on delivery - from physically verified suppliers</p>
       </footer>
       <InstallBanner />
       <ToastHost />

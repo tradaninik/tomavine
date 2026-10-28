@@ -8,7 +8,7 @@ import { Btn, Card, Empty, ErrBox, Field, Loading, SectionTitle, inr, inputCls }
 import { useLang } from "@/lib/i18n";
 import type { ProductCard } from "@/lib/catalog";
 import { nurseryFeatureOn } from "@/lib/nursery-features";
-import { clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
+import { belowMoqLines, clearCart, computeTotals, loadCart, missingLines } from "@/lib/cart";
 import type { CartLine } from "@/lib/cart";
 import { DELIVERY_STATE_OPTIONS, HOME_STATE } from "@/lib/states";
 import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
@@ -204,6 +204,8 @@ export default function CheckoutPage() {
   }, []);
 
   const missing = missingLines(lines, products);
+  // Mission S6-B: MOQ-enforced checkout (mirror of the cart page).
+  const belowMoq = belowMoqLines(lines, products);
   const totals = computeTotals(lines, products, mode, payMethod, tiers === null ? undefined : { tiers: tiers });
   const codAllowed = paymentAllowed(products, "cod");
   const onlineAllowed = paymentAllowed(products, "online");
@@ -303,8 +305,8 @@ export default function CheckoutPage() {
     if (submitting) {
       return;
     }
-    if (!formValid || !accepted || missing.length > 0 || lines.length === 0) {
-      setSubmitError(t("err_generic"));
+    if (!formValid || !accepted || missing.length > 0 || belowMoq.length > 0 || lines.length === 0) {
+      setSubmitError(belowMoq.length > 0 ? t("s7_moq_checkout") : t("err_generic"));
       return;
     }
     // Mission F: payment switches — greyed buttons should have stopped
@@ -579,6 +581,11 @@ export default function CheckoutPage() {
                 </ErrBox>
               </div>
             ) : null}
+            {belowMoq.length > 0 ? (
+              <div className="mt-3">
+                <ErrBox>{t("s7_moq_checkout")}</ErrBox>
+              </div>
+            ) : null}
             {totals.orderCount > 1 ? (
               <p className="mb-3 mt-3 rounded-xl bg-[#EDF2E6] p-3 text-xs font-semibold text-[#24562F]">
                 📦 {t("per_nursery", { n: totals.orderCount })}
@@ -628,7 +635,7 @@ export default function CheckoutPage() {
                 </Link>
               </span>
             </label>
-            <Btn type="submit" disabled={submitting || !formValid || missing.length > 0 || !accepted} size="lg" className="mt-4 w-full">
+            <Btn type="submit" disabled={submitting || !formValid || missing.length > 0 || belowMoq.length > 0 || !accepted} size="lg" className="mt-4 w-full">
               {submitting ? t("placing") : t("place_order")}
             </Btn>
             <Btn href="/shop/cart" variant="ghost" size="sm" className="mt-2 w-full">

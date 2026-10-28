@@ -113,6 +113,7 @@ export async function PATCH(request: Request) {
     subCategory?: string;
     care?: unknown;
     rescue?: { pct: number; days: number } | null;
+    moq?: number | null;
   };
 
   try {
@@ -144,6 +145,7 @@ export async function PATCH(request: Request) {
     hidden?: boolean;
     subCategory?: string | null;
     care?: Prisma.ProductUpdateInput["care"];
+    moq?: number | null;
   } = {};
 
   if (typeof body.nameEn === "string") {
@@ -176,6 +178,18 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Stock cannot be more than 9,999" }, { status: 400 });
     }
     data.stock = body.stock;
+  }
+
+  // Mission S6-B: minimum order quantity - null clears it, numbers
+  // are validated 1..100000 (whole rupees of sanity for a ladder).
+  if (body.moq !== undefined) {
+    if (body.moq === null) {
+      data.moq = null;
+    } else if (typeof body.moq === "number" && Number.isInteger(body.moq) && body.moq >= 1 && body.moq <= 100000) {
+      data.moq = body.moq;
+    } else {
+      return NextResponse.json({ error: "MOQ must be a whole number between 1 and 100000" }, { status: 400 });
+    }
   }
 
   if (typeof body.hidden === "boolean") {
@@ -326,6 +340,7 @@ export async function POST(request: Request) {
     priceMin?: number;
     mrp?: number;
     stock?: number;
+    moq?: number | null;
     care?: unknown;
     agri?: unknown;
     provenance?: unknown;
@@ -430,6 +445,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Stock cannot be negative" }, { status: 400 });
   }
 
+  const moq = body.moq === undefined || body.moq === null ? null : body.moq;
+
+  if (moq !== null && (typeof moq !== "number" || !Number.isInteger(moq) || moq < 1 || moq > 100000)) {
+    return NextResponse.json({ error: "MOQ must be a whole number between 1 and 100000" }, { status: 400 });
+  }
+
   let care: FlatJson | undefined;
   let agri: FlatJson | undefined;
   let provenance: FlatJson | undefined;
@@ -483,6 +504,7 @@ export async function POST(request: Request) {
       priceMin: priceMin,
       mrp: mrp,
       stock: stock,
+      moq: moq,
       care: care === undefined ? undefined : (care as Prisma.InputJsonValue),
       agri: agri === undefined ? undefined : (agri as Prisma.InputJsonValue),
       provenance: provenance === undefined ? undefined : (provenance as Prisma.InputJsonValue),

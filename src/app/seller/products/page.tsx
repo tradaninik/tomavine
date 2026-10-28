@@ -27,6 +27,7 @@ type Product = {
   priceMin: number;
   mrp: number;
   stock: number;
+  moq: number | null;
   hidden: boolean;
   image: string | null;
   care: Record<string, string> | null;
@@ -57,6 +58,7 @@ type FormState = {
   rescueOn: boolean;
   rescuePct: string;
   rescueDays: string;
+  moq: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -72,6 +74,7 @@ const EMPTY_FORM: FormState = {
   rescueOn: false,
   rescuePct: "30",
   rescueDays: "3",
+  moq: "",
 };
 
 const REGIONAL_LANGS: { code: string; label: string }[] = [
@@ -189,6 +192,7 @@ export default function SellerProductsPage() {
   const [newPrice, setNewPrice] = useState("");
   const [newMrp, setNewMrp] = useState("");
   const [newStock, setNewStock] = useState("");
+  const [newMoq, setNewMoq] = useState("");
   const [newCareSun, setNewCareSun] = useState("");
   const [newCareSoil, setNewCareSoil] = useState("");
   const [newCareWater, setNewCareWater] = useState("");
@@ -324,6 +328,7 @@ export default function SellerProductsPage() {
       rescueOn: p.rescue !== null,
       rescuePct: p.rescue ? String(p.rescue.pct) : "30",
       rescueDays: "3",
+      moq: typeof p.moq === "number" ? String(p.moq) : "",
     });
   }
 
@@ -335,6 +340,7 @@ export default function SellerProductsPage() {
       stock: Number(form.stock),
       hidden: form.hidden,
       subCategory: form.sub,
+      moq: form.moq.trim() === "" ? null : Number(form.moq),
     };
 
     if (form.rescueOn) {
@@ -595,6 +601,12 @@ export default function SellerProductsPage() {
       return;
     }
 
+    const newMoqNum = newMoq.trim() === "" ? null : Number(newMoq);
+    if (newMoqNum !== null && (!Number.isInteger(newMoqNum) || newMoqNum < 1 || newMoqNum > 100000)) {
+      setCreateError("Minimum order qty must be a whole number between 1 and 100000.");
+      return;
+    }
+
     const variants: { label: string; price: number }[] = [];
     for (const v of newVariants) {
       const label = v.label.trim();
@@ -624,6 +636,7 @@ export default function SellerProductsPage() {
       priceMin: price,
       mrp: mrp,
       stock: stock,
+      moq: newMoqNum,
     };
     if (newCategoryId) {
       // Tree picker selection (2c) — the server re-validates the
@@ -901,7 +914,7 @@ export default function SellerProductsPage() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <label className="text-sm font-medium text-[#1C3A2A]">
               Price (₹)
               <input
@@ -930,6 +943,16 @@ export default function SellerProductsPage() {
                 inputMode="numeric"
                 onChange={(e) => setNewStock(e.target.value.replace(/\D/g, ""))}
                 placeholder="0"
+              />
+            </label>
+            <label className="text-sm font-medium text-[#1C3A2A]">
+              Min order qty (blank = none)
+              <input
+                className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                value={newMoq}
+                inputMode="numeric"
+                onChange={(e) => setNewMoq(e.target.value.replace(/\D/g, ""))}
+                placeholder="e.g. 100"
               />
             </label>
             <label className="text-sm font-medium text-[#1C3A2A]">
@@ -1143,7 +1166,7 @@ export default function SellerProductsPage() {
                   </select>
                 </label>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="text-sm font-medium text-[#1C3A2A]">
                     Price (₹)
                     <input
@@ -1169,6 +1192,16 @@ export default function SellerProductsPage() {
                       value={form.stock}
                       inputMode="numeric"
                       onChange={(e) => setForm({ ...form, stock: e.target.value.replace(/\D/g, "") })}
+                    />
+                  </label>
+                  <label className="text-sm font-medium text-[#1C3A2A]">
+                    Minimum order qty (blank = none)
+                    <input
+                      className="mt-1 w-full rounded-lg border border-[#1C3A2A]/20 bg-white px-3 py-2"
+                      value={form.moq}
+                      inputMode="numeric"
+                      onChange={(e) => setForm({ ...form, moq: e.target.value.replace(/\D/g, "") })}
+                      placeholder="e.g. 100"
                     />
                   </label>
                 </div>
