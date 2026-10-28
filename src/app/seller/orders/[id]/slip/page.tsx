@@ -6,6 +6,18 @@ import PrintButton from "./print-button";
 
 export const metadata = { title: "Packing slip" };
 
+// Mission S6 fix: row shape shared by the meta.bulk fallback rows so
+// the map/filter below narrows cleanly (vlabel is string | null, the
+// same as a real OrderItem row - the inferred null literal broke the
+// type predicate and left every row "possibly null").
+type SlipRow = {
+  id: string;
+  nameSnap: string;
+  vlabel: string | null;
+  qty: number;
+  unitPrice: number;
+};
+
 // Address Json shape — tolerant read: checkout writes
 // {name, phone, house, street, city, pincode}; seed rows write
 // {name, phone, line1, city, pincode}. Same handling as the orders
@@ -55,6 +67,37 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
   const buyerPhone = addr.phone ?? order.user.phone;
   const meta = order.meta as { cod?: boolean } | null;
   const isCod = (meta !== null && meta.cod === true) || order.payment?.method === "cod";
+  // ADDED (S6-A): quote-based bulk orders keep their lines in
+  // meta.bulk.items (no OrderItem rows) - the slip table falls back
+  // to those so the loading sheet always lists what ships.
+  const bulkObj = (order.meta ?? {}) as Record<string, unknown>;
+  const bulkPack = bulkObj.bulk;
+  const rawItems =
+    bulkPack !== null && typeof bulkPack === "object" && !Array.isArray(bulkPack)
+      ? (bulkPack as Record<string, unknown>).items
+      : null;
+  const metaItems = Array.isArray(rawItems) ? rawItems : [];
+  const slipRows =
+    order.items.length > 0
+      ? order.items
+      : metaItems
+          .map((x, ix): SlipRow | null => {
+            if (x === null || typeof x !== "object") {
+              return null;
+            }
+            const r = x as Record<string, unknown>;
+            if (typeof r.name !== "string" || r.name.length === 0) {
+              return null;
+            }
+            return {
+              id: "meta-" + ix,
+              nameSnap: r.name,
+              vlabel: null,
+              qty: Number(r.qty) || 0,
+              unitPrice: Number(r.unit) || 0,
+            };
+          })
+          .filter((x): x is SlipRow => x !== null);
   const placedOn = new Date(order.createdAt).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -138,7 +181,7 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
             </tr>
           </thead>
           <tbody>
-            {order.items.map((it) => (
+            {slipRows.map((it) => (
               <tr key={it.id} className="border-b border-black/20 align-top">
                 <td className="py-1.5 pr-2">
                   {it.nameSnap}

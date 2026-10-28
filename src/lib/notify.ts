@@ -1,5 +1,34 @@
 import { db } from "@/lib/db";
 import { waText } from "@/lib/whatsapp";
+import { SITE_URL } from "@/lib/site";
+
+// Mission S6-A fix: quotation lines for quote-based bulk orders ride
+// in meta.bulk.items (no OrderItem rows) - surfaced wherever the
+// classic items list is empty.
+function bulkAlertLinesOf(meta: unknown): string {
+  if (meta === null || typeof meta !== "object") {
+    return "";
+  }
+  const bulk = (meta as Record<string, unknown>).bulk;
+  if (bulk === null || typeof bulk !== "object" || Array.isArray(bulk)) {
+    return "";
+  }
+  const arr = (bulk as Record<string, unknown>).items;
+  if (!Array.isArray(arr)) {
+    return "";
+  }
+  return arr
+    .map((x) => {
+      if (x === null || typeof x !== "object") {
+        return "";
+      }
+      const r = x as Record<string, unknown>;
+      const name = typeof r.name === "string" ? r.name : "";
+      return name.length > 0 ? String(Number(r.qty) || 0) + " x " + name : "";
+    })
+    .filter((s) => s.length > 0)
+    .join("\n");
+}
 
 function inr(n: number): string {
   return "₹" + n.toLocaleString("en-IN");
@@ -39,13 +68,21 @@ export async function notifySellerNewOrder(orderId: string): Promise<void> {
     const meta = order.meta as { cod?: boolean } | null;
     const isCod = (meta !== null && meta.cod === true) || order.payment?.method === "cod";
 
+    // Mission S6-A fix: quote-based bulk orders have no OrderItem rows
+    // - the seller alert falls back to the meta.bulk.items lines so
+    // the WhatsApp message lists what to source.
+    const alertLines =
+      itemLines.length > 0
+        ? itemLines
+        : bulkAlertLinesOf(order.meta);
+
     const addr = order.address as { city?: string; pincode?: string } | null;
     const place = addr !== null && addr.city ? ` · Deliver to ${addr.city}${addr.pincode ? " " + addr.pincode : ""}` : "";
 
     const msg = [
       `🌱 New order ${order.code} for ${order.nursery.name}`,
       "",
-      itemLines,
+      alertLines,
       "",
       `Total ${inr(order.total)} · ${isCod ? "Cash on delivery" : "Paid online"}${place}`,
       "",
@@ -97,6 +134,14 @@ export async function buyerUpdate(orderId: string): Promise<void> {
       msg = `Order ${order.code} has been cancelled.`;
     } else {
       return;
+    }
+
+    // Mission S6-A fix: the tracking token lives on the Order column
+    // (it was never written into meta) - every buyer update for an
+    // order that has one ends with the link, so the timeline is
+    // always one tap away, even for buyers who never log in.
+    if (msg.length > 0 && typeof order.trackToken === "string" && order.trackToken.length > 0) {
+      msg = msg + "\nTrack your order: " + SITE_URL + "/order/" + order.trackToken;
     }
 
     await waText(order.user.phone, msg);

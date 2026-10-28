@@ -47,7 +47,7 @@ async function commitSellerTransition(
   order: LoadedOrder,
   nextStatus: OrderStatus,
   note: string,
-  extraMeta: Record<string, string | number | boolean> | null = null,
+  extraMeta: Record<string, unknown> | null = null,
 ): Promise<string | null> {
   const deliveryOtp =
     nextStatus === OrderStatus.OUT_FOR_DELIVERY
@@ -60,7 +60,7 @@ async function commitSellerTransition(
     updateData.deliveryOtp = deliveryOtp;
   }
 
-  let metaPatch = extraMeta;
+  let metaPatch: Record<string, unknown> | null = extraMeta;
 
   if (nextStatus === OrderStatus.DELIVERED) {
     // ── Trust pack: record the delivery instant and compute the
@@ -69,7 +69,7 @@ async function commitSellerTransition(
     // no onTime key → the order can never show as late.
     const deliveredAt = new Date().toISOString();
     const verdict = computeOnTime(readTrustMeta(order.meta).promisedDate, deliveredAt);
-    const patch: Record<string, string | number | boolean> = { deliveredAt: deliveredAt, ...extraMeta };
+    const patch: Record<string, unknown> = { deliveredAt: deliveredAt, ...extraMeta };
     if (verdict !== null) {
       patch.onTime = verdict;
     }
@@ -206,7 +206,7 @@ export async function PATCH(request: Request) {
 
   let nextStatus: OrderStatus;
   let note = "";
-  let extraMeta: Record<string, string | number | boolean> | null = null;
+  let extraMeta: Record<string, unknown> | null = null;
 
   if (action === "accept") {
     if (order.status !== OrderStatus.PENDING) {

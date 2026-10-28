@@ -158,6 +158,7 @@ model Product {
   stock        Int              @default(0)
   hidden       Boolean          @default(false)
   subCategory  String?
+  moq          Int?
   image        String?
   createdAt    DateTime         @default(now())
   variants     ProductVariant[]
@@ -202,6 +203,7 @@ model Order {
   total       Int
   address     Json
   deliveryOtp String?
+  trackToken  String?  @unique
   meta        Json?
   createdAt   DateTime     @default(now())
   items       OrderItem[]

@@ -43,6 +43,7 @@ function fmtDate(iso: string | null): string {
 export default function QuoteView({ quote }: { quote: QuoteViewProps }) {
   const { t } = useLang();
   const [status, setStatus] = useState(quote.status);
+  const [track, setTrack] = useState<{ code: string; trackToken: string } | null>(null);
   const [lapsed, setLapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -67,7 +68,11 @@ export default function QuoteView({ quote }: { quote: QuoteViewProps }) {
         body: JSON.stringify({ action: action }),
       });
 
-      const data = (await res.json().catch(() => null)) as { error?: unknown; status?: unknown } | null;
+      const data = (await res.json().catch(() => null)) as {
+        error?: unknown;
+        status?: unknown;
+        order?: { code?: unknown; trackToken?: unknown } | null;
+      } | null;
 
       if (!res.ok) {
         if (data && (data.status === "accepted" || data.status === "declined")) {
@@ -83,6 +88,18 @@ export default function QuoteView({ quote }: { quote: QuoteViewProps }) {
       }
 
       setStatus(action === "accept" ? "accepted" : "declined");
+      if (
+        action === "accept" &&
+        data !== null &&
+        data.order !== null &&
+        typeof data.order === "object" &&
+        typeof data.order.trackToken === "string"
+      ) {
+        setTrack({
+          code: typeof data.order.code === "string" ? data.order.code : "",
+          trackToken: data.order.trackToken,
+        });
+      }
     } catch {
       setError(t("s4_quote_err"));
     } finally {
@@ -106,6 +123,14 @@ export default function QuoteView({ quote }: { quote: QuoteViewProps }) {
         <p className="mt-4 rounded-xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold text-[#24562F]">
           {t("s4_quote_accepted_ok")}
         </p>
+      ) : null}
+      {status === "accepted" && track !== null ? (
+        <div className="mt-3 rounded-xl border border-[#2F6B3F]/30 bg-[#EDF2E6] px-4 py-3 text-sm">
+          <p className="font-semibold text-[#24562F]">{t("s6_order_placed")}</p>
+          <a href={"/order/" + track.trackToken} className="mt-1 inline-block font-bold text-[#2F6B3F] underline">
+            {t("s6_order_track_cta")} &rarr;
+          </a>
+        </div>
       ) : null}
       {status === "declined" ? (
         <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">

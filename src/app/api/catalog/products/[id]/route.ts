@@ -62,6 +62,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       priceMin: product.priceMin,
       mrp: product.mrp,
       stock: product.stock,
+      moq: product.moq,
       subCategory: product.subCategory,
       image: product.image,
       nursery: product.nursery,

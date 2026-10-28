@@ -102,14 +102,15 @@ export function computeOnTime(promisedDate: string | undefined, deliveredAtISO: 
 // preserving unknown scalar keys. Flat scalars only — matches the
 // Prisma JSON write convention (Record<string, string|number|boolean>
 // + as Prisma.InputJsonValue).
-export function writeTrustIntoMeta(existing: unknown, patch: FlatJson): FlatJson {
-  const base: FlatJson = {};
+// Mission S6-A update: unknown keys of ANY JSON shape are preserved
+// verbatim now (the S6 bulk pack rides in meta.bulk), not flat
+// scalars only. Mission S6 fix: the seller orders route now passes
+// the fully merged meta object here, so the patch parameter accepts
+// any JSON shape (Record<string, unknown>) - flat patches still work.
+export function writeTrustIntoMeta(existing: unknown, patch: Record<string, unknown>): Record<string, unknown> {
+  const base: Record<string, unknown> = {};
   if (existing !== null && typeof existing === "object" && !Array.isArray(existing)) {
-    for (const [k, v] of Object.entries(existing as Record<string, unknown>)) {
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-        base[k] = v;
-      }
-    }
+    Object.assign(base, existing as Record<string, unknown>);
   }
   return { ...base, ...patch };
 }

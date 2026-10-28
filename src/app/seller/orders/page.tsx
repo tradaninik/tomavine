@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Btn, Card, Pill, inr, paymentLabel, statusLabel, statusTone } from "../ui";
 import { todayIST, plusDaysIST, readTrustMeta, formatPromisedDay } from "@/lib/trust";
+import { SITE_URL } from "@/lib/site";
+import { whatsappLink } from "@/lib/settings-shared";
 
 type Item = {
   id: string;
@@ -31,6 +33,7 @@ type Order = {
   tax: number;
   total: number;
   deliveryOtp: string | null;
+  trackToken: string | null;
   createdAt: string;
   meta: unknown;
   // ── ADDED (power pack): OrderEvent rows for the per-order timeline.
@@ -86,6 +89,54 @@ function csvCell(value: string): string {
   return /[",\n\r;]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
 }
 
+// ADDED (S6-A): quote-based bulk orders carry their line items in
+// meta.bulk.items - free-text quotation lines, no OrderItem rows.
+// These helpers surface them wherever the classic items list is
+// empty, so every order renders its lines.
+type MetaItem = { name: string; qty: number; unit: number };
+
+function bulkItemsOf(o: { meta: unknown }): MetaItem[] {
+  if (o.meta === null || typeof o.meta !== "object") {
+    return [];
+  }
+  const bulk = (o.meta as Record<string, unknown>).bulk;
+  if (bulk === null || typeof bulk !== "object" || Array.isArray(bulk)) {
+    return [];
+  }
+  const arr = (bulk as Record<string, unknown>).items;
+  if (!Array.isArray(arr)) {
+    return [];
+  }
+  return arr
+    .map((x): MetaItem | null => {
+      if (x === null || typeof x !== "object") {
+        return null;
+      }
+      const r = x as Record<string, unknown>;
+      const name = typeof r.name === "string" ? r.name : "";
+      if (name.length === 0) {
+        return null;
+      }
+      return { name: name, qty: Number(r.qty) || 0, unit: Number(r.unit) || 0 };
+    })
+    .filter((x): x is MetaItem => x !== null);
+}
+
+type UnifiedRow = { id: string; nameSnap: string; vlabel: string | null; qty: number; unitPrice: number };
+
+function orderRowsOf(o: Order): UnifiedRow[] {
+  if (o.items.length > 0) {
+    return o.items;
+  }
+  return bulkItemsOf(o).map((it, ix) => ({
+    id: "meta-" + ix,
+    nameSnap: it.name,
+    vlabel: null,
+    qty: it.qty,
+    unitPrice: it.unit,
+  }));
+}
+
 export default function SellerOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState<"active" | "all">("active");
@@ -100,6 +151,7 @@ export default function SellerOrdersPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
   const [openEvents, setOpenEvents] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +185,18 @@ export default function SellerOrdersPage() {
     setBulkMsg("");
     setOpenEvents({});
     setTab(next);
+  }
+
+  // ADDED (S6-A): copy / WhatsApp-forward the buyer tracking link.
+  async function copyTrackLink(token: string) {
+    const url = SITE_URL + "/order/" + token;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt("Copy the tracking link:", url);
+    }
+    setCopied(token);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   const selectable = orders.filter((o) => !TERMINAL.has(o.status));
@@ -175,9 +239,14 @@ export default function SellerOrdersPage() {
     const lines = [header.join(",")];
 
     for (const o of orders) {
-      const items = o.items
-        .map((it) => `${it.nameSnap}${it.vlabel ? ` (${it.vlabel})` : ""} x${it.qty}`)
-        .join("; ");
+      const items =
+        o.items.length > 0
+          ? o.items
+              .map((it) => `${it.nameSnap}${it.vlabel ? ` (${it.vlabel})` : ""} x${it.qty}`)
+              .join("; ")
+          : bulkItemsOf(o)
+              .map((it) => `${it.name} x${it.qty}`)
+              .join("; ");
 
       lines.push(
         [
@@ -411,7 +480,7 @@ export default function SellerOrdersPage() {
             ) : null}
 
             <ul className="mt-4 divide-y divide-[#1C3A2A]/5 text-sm">
-              {o.items.map((it) => (
+              {orderRowsOf(o).map((it) => (
                 <li key={it.id} className="flex justify-between py-2">
                   <span className="text-[#1C3A2A]">
                     {it.qty} × {it.nameSnap}
@@ -436,6 +505,36 @@ export default function SellerOrdersPage() {
                   {o.address.name ?? ""}
                   {o.address.phone ? ` · ${o.address.phone}` : ""}
                 </p>
+              </div>
+            ) : null}
+
+            {o.trackToken ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-[#2F6B3F]/30 bg-[#EDF2E6] px-4 py-3 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/50">
+                  Buyer tracking link
+                </span>
+                <code className="min-w-0 flex-1 truncate text-xs text-[#1C3A2A]">/order/{o.trackToken}</code>
+                <button
+                  type="button"
+                  onClick={() => copyTrackLink(o.trackToken ?? "")}
+                  className="rounded-lg bg-[#2F6B3F] px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Copy link
+                </button>
+                <a
+                  href={whatsappLink(
+                    o.user.phone,
+                    "Track your Tomavine order " + o.code + ": " + SITE_URL + "/order/" + o.trackToken,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-[#2F6B3F] px-3 py-1.5 text-xs font-semibold text-[#2F6B3F]"
+                >
+                  Send on WhatsApp
+                </a>
+                {copied === o.trackToken ? (
+                  <span className="text-xs font-semibold text-[#24562F]">Copied!</span>
+                ) : null}
               </div>
             ) : null}
 
