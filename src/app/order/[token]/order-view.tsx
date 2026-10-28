@@ -6,6 +6,13 @@ import { whatsappLink } from "@/lib/settings-shared";
 
 type OItem = { name: string; qty: number; unit: number; note: string | null };
 
+// S6-C: informational settlement snapshot written by the seller
+// (advance / balance UPI receipts in Order.meta.settlement). A null
+// part simply means not marked yet - the card renders only when at
+// least one part exists.
+export type SettlementPart = { amount: number; at: string; upiRef: string | null };
+export type SettlementView = { advance: SettlementPart | null; balance: SettlementPart | null };
+
 export type OrderViewProps = {
   token: string;
   code: string;
@@ -23,6 +30,7 @@ export type OrderViewProps = {
   total: number;
   note: string | null;
   buyerConfirmedAt: string | null;
+  settlement: SettlementView | null;
   events: { id: string; status: string; note: string | null; actorRole: string; createdAt: string }[];
 };
 
@@ -111,6 +119,47 @@ export default function OrderView({ order }: { order: OrderViewProps }) {
     order.nurseryPhone.length > 0
       ? whatsappLink(order.nurseryPhone, "Tomavine order " + order.code)
       : "";
+
+  const advPart = order.settlement === null ? null : order.settlement.advance;
+  const balPart = order.settlement === null ? null : order.settlement.balance;
+  const showPayCard = advPart !== null || balPart !== null;
+  const payRows = showPayCard
+    ? [
+        {
+          label: t("s6c_pay_advance"),
+          marked: advPart !== null,
+          amount: advPart !== null ? advPart.amount : null,
+          dateText:
+            advPart !== null && advPart.at.length > 0
+              ? t("s6c_pay_received_on", { date: fmtDate(advPart.at) })
+              : "",
+          refText:
+            advPart !== null && advPart.upiRef !== null
+              ? t("s6c_pay_upi_ref", { ref: advPart.upiRef })
+              : "",
+          pendingText: t("s6c_pay_pending"),
+        },
+        {
+          label: t("s6c_pay_balance"),
+          marked: balPart !== null,
+          amount:
+            balPart !== null
+              ? balPart.amount
+              : advPart !== null
+                ? Math.max(0, order.total - advPart.amount)
+                : null,
+          dateText:
+            balPart !== null && balPart.at.length > 0
+              ? t("s6c_pay_received_on", { date: fmtDate(balPart.at) })
+              : "",
+          refText:
+            balPart !== null && balPart.upiRef !== null
+              ? t("s6c_pay_upi_ref", { ref: balPart.upiRef })
+              : "",
+          pendingText: t("s6c_pay_due_delivery"),
+        },
+      ]
+    : [];
 
   async function confirmReceipt() {
     setBusy(true);
@@ -257,6 +306,46 @@ export default function OrderView({ order }: { order: OrderViewProps }) {
               </tr>
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {showPayCard ? (
+        <div className="mt-4 rounded-2xl border border-[#1C3A2A]/10 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#1C3A2A]/50">
+            {t("s6c_pay_title")}
+          </p>
+          <div className="mt-3 space-y-3">
+            {payRows.map((row) => (
+              <div
+                key={row.label}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[#E4E0CE]/60 pb-3 last:border-0 last:pb-0"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-[#1C3A2A]">{row.label}</p>
+                  {row.marked && row.dateText.length > 0 ? (
+                    <p className="text-xs text-[#1C3A2A]/60">{row.dateText}</p>
+                  ) : null}
+                  {row.marked && row.refText.length > 0 ? (
+                    <p className="text-xs text-[#1C3A2A]/60">{row.refText}</p>
+                  ) : null}
+                  {!row.marked ? (
+                    <p className="text-xs font-semibold text-[#1C3A2A]/60">{row.pendingText}</p>
+                  ) : null}
+                </div>
+                {row.amount !== null ? (
+                  <p
+                    className={
+                      row.marked
+                        ? "text-sm font-bold text-[#24562F]"
+                        : "text-sm font-semibold text-[#1C3A2A]/70"
+                    }
+                  >
+                    {inr(row.amount)}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

@@ -47,6 +47,37 @@ export default async function OrderTokenPage({ params }: { params: Promise<{ tok
     };
   });
 
+  // S6-C: settlement snapshot (informational only). The seller marks
+  // advance/balance UPI receipts into meta.settlement; the tracking
+  // page renders them next to the totals. Defensive read - anything
+  // malformed is treated as not marked.
+  function settlementPart(part: unknown): { amount: number; at: string; upiRef: string | null } | null {
+    if (part === null || typeof part !== "object" || Array.isArray(part)) {
+      return null;
+    }
+    const r = part as Record<string, unknown>;
+    const amt = Number(r.amount);
+    if (!Number.isFinite(amt) || amt < 0) {
+      return null;
+    }
+    return {
+      amount: amt,
+      at: typeof r.at === "string" ? r.at : "",
+      upiRef: typeof r.upiRef === "string" && r.upiRef.length > 0 ? r.upiRef : null,
+    };
+  }
+  const rawSettlement =
+    meta.settlement !== null && typeof meta.settlement === "object" && !Array.isArray(meta.settlement)
+      ? (meta.settlement as Record<string, unknown>)
+      : null;
+  const settlement =
+    rawSettlement === null
+      ? null
+      : {
+          advance: settlementPart(rawSettlement.advance),
+          balance: settlementPart(rawSettlement.balance),
+        };
+
   const addr = (order.address ?? {}) as Record<string, unknown>;
   const trust = readTrustMeta(order.meta);
 
@@ -67,6 +98,7 @@ export default async function OrderTokenPage({ params }: { params: Promise<{ tok
     total: order.total,
     note: typeof bulk.quoteNote === "string" ? bulk.quoteNote : null,
     buyerConfirmedAt: typeof meta.buyerConfirmedAt === "string" ? meta.buyerConfirmedAt : null,
+    settlement: settlement,
     events: order.events.map((ev) => ({
       id: ev.id,
       status: ev.status,

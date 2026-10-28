@@ -132,6 +132,7 @@ model Category {
   legacyKey String?    @unique
   sortOrder Int        @default(0)
   active    Boolean    @default(true)
+  stockFreshDays Int?
   createdAt DateTime   @default(now())
   products  Product[]
 
@@ -159,6 +160,8 @@ model Product {
   hidden       Boolean          @default(false)
   subCategory  String?
   moq          Int?
+  stockConfirmedAt DateTime?
+  availableFrom    DateTime?
   image        String?
   createdAt    DateTime         @default(now())
   variants     ProductVariant[]

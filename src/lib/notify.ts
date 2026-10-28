@@ -149,6 +149,72 @@ export async function buyerUpdate(orderId: string): Promise<void> {
     console.error("[notify:error] buyer update failed:", e);
   }
 }
+// Mission S6-C: settlement receipt confirmation. The seller marked
+// an advance/balance UPI payment as received; the buyer hears it
+// on WhatsApp with the amount, the optional UPI ref and - for an
+// advance - what is still payable to the nursery on delivery.
+// Informational twin of the /order/[token] payment status card;
+// Order.status is never involved.
+type SettlementMark = { amount?: number; at?: string; upiRef?: string | null };
+
+export async function buyerSettlementUpdate(orderId: string, kind: "advance" | "balance"): Promise<void> {
+  try {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      include: {
+        nursery: { select: { name: true } },
+        user: { select: { phone: true } },
+      },
+    });
+
+    if (!order) {
+      return;
+    }
+
+    const meta = (order.meta ?? {}) as { settlement?: { advance?: SettlementMark; balance?: SettlementMark } };
+    const mark = meta.settlement?.[kind];
+
+    if (!mark || typeof mark.amount !== "number") {
+      return;
+    }
+
+    const inrAmt = "\u20B9" + mark.amount.toLocaleString("en-IN");
+    const ref = typeof mark.upiRef === "string" && mark.upiRef.length > 0 ? " UPI ref " + mark.upiRef + "." : "";
+    let msg = "";
+
+    if (kind === "advance") {
+      const balance = meta.settlement?.balance;
+      const tail =
+        balance && typeof balance.amount === "number"
+          ? " Settlement complete - thank you!"
+          : " Balance \u20B9" +
+            Math.max(0, order.total - mark.amount).toLocaleString("en-IN") +
+            " payable to the nursery on delivery.";
+      msg = "\uD83D\uDCB0 " + order.code + ": " + order.nursery.name + " received your advance of " + inrAmt + "." + ref + tail;
+    } else {
+      msg =
+        "\uD83D\uDCB0 " +
+        order.code +
+        ": " +
+        order.nursery.name +
+        " received your balance payment of " +
+        inrAmt +
+        "." +
+        ref +
+        " Settlement complete - thank you!";
+    }
+
+    // Same tail as buyerUpdate: one tap to the public tracking page.
+    if (typeof order.trackToken === "string" && order.trackToken.length > 0) {
+      msg = msg + "\nTrack your order: " + SITE_URL + "/order/" + order.trackToken;
+    }
+
+    await waText(order.user.phone, msg);
+  } catch (e) {
+    console.error("[notify:error] buyer settlement update failed:", e);
+  }
+}
+
 export async function notifySellerCancelled(orderId: string): Promise<void> {
   try {
     const order = await db.order.findUnique({

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { OrderStatus, Role, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireNursery } from "@/lib/seller";
-import { buyerUpdate } from "@/lib/notify";
+import { buyerUpdate, buyerSettlementUpdate } from "@/lib/notify";
 import { validatePromisedDate, computeOnTime, readTrustMeta, writeTrustIntoMeta } from "@/lib/trust";
 
 const ACTIVE_STATUSES: OrderStatus[] = [
@@ -171,7 +171,8 @@ export async function PATCH(request: Request) {
 
   const { nursery } = auth;
 
-  let body: { id?: string; action?: string; promisedDate?: string; ids?: unknown; status?: unknown };
+  let body: { id?: string; action?: string; promisedDate?: string; ids?: unknown; status?: unknown;
+    amount?: unknown; upiRef?: string };
 
   try {
     body = await request.json();
@@ -202,6 +203,16 @@ export async function PATCH(request: Request) {
 
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  // -- S6-C settlement pack: the seller confirms UPI money actually
+  // received (advance or balance leg). Informational only - this
+  // early return never reaches the status ladder below, and the
+  // Payment row is untouched (gateway money stays with the
+  // webhook; this pack records off-platform UPI between buyer and
+  // nursery on Order.meta).
+  if (action === "advance-received" || action === "balance-received") {
+    return await patchSettlement(order, action === "advance-received" ? "advance" : "balance", body.amount, body.upiRef);
   }
 
   let nextStatus: OrderStatus;
@@ -342,4 +353,89 @@ async function patchBulk(nurseryId: string, idsRaw: unknown[], statusRaw: unknow
   }
 
   return NextResponse.json({ ok: true, updated: updated, results: results });
+}
+
+// PATCH settlement actions (S6-C): mark the advance or balance UPI
+// payment as received. INFORMATIONAL ONLY - Order.status and the
+// Payment row never change. meta.settlement shape (each leg
+// optional, written once):
+//   { advance?: { amount, at, upiRef }, balance?: { amount, at, upiRef } }
+// - advance needs the explicit amount the seller received (whole
+//   rupees, at most the order total); balance falls back to the
+//   order total minus the marked advance (full total when no
+//   advance was marked yet).
+// - Marking the same leg twice -> 400 (nothing to update).
+// - Appends an OrderEvent note under the CURRENT status with the
+//   SELLER actor, then pings the buyer on WhatsApp.
+async function patchSettlement(
+  order: LoadedOrder,
+  kind: "advance" | "balance",
+  amountRaw: unknown,
+  upiRefRaw: string | undefined,
+): Promise<Response> {
+  const meta = (order.meta ?? {}) as Record<string, unknown>;
+  const settlement = (meta.settlement ?? {}) as Record<string, unknown>;
+  const prior = settlement[kind];
+
+  if (prior !== null && typeof prior === "object" && !Array.isArray(prior)) {
+    return NextResponse.json(
+      { error: kind === "advance" ? "Advance was already marked as received" : "Balance was already marked as received" },
+      { status: 400 },
+    );
+  }
+
+  let amount: number;
+
+  if (typeof amountRaw === "number" && Number.isInteger(amountRaw) && amountRaw > 0) {
+    amount = amountRaw;
+  } else if (typeof amountRaw === "number") {
+    return NextResponse.json({ error: "Amount must be a whole number of rupees greater than zero" }, { status: 400 });
+  } else if (kind === "balance") {
+    const advanceRow = settlement.advance;
+    const paid =
+      advanceRow !== null && typeof advanceRow === "object" && !Array.isArray(advanceRow)
+        ? (advanceRow as { amount?: unknown }).amount
+        : null;
+    amount = order.total - (typeof paid === "number" ? paid : 0);
+  } else {
+    return NextResponse.json({ error: "Enter the advance amount received" }, { status: 400 });
+  }
+
+  if (amount > order.total) {
+    return NextResponse.json({ error: "Amount is more than the order total" }, { status: 400 });
+  }
+  if (amount <= 0) {
+    return NextResponse.json({ error: "Nothing left to mark as received" }, { status: 400 });
+  }
+
+  const upiRef = typeof upiRefRaw === "string" ? upiRefRaw.trim().slice(0, 64) : "";
+  const at = new Date().toISOString();
+  const settlementNext: Record<string, unknown> = { ...settlement };
+  settlementNext[kind] = { amount: amount, at: at, upiRef: upiRef.length > 0 ? upiRef : null };
+
+  await db.order.update({
+    where: { id: order.id },
+    data: { meta: { ...meta, settlement: settlementNext } as Prisma.InputJsonValue },
+  });
+
+  await db.orderEvent.create({
+    data: {
+      orderId: order.id,
+      status: order.status,
+      note:
+        (kind === "advance" ? "Advance of \u20B9" : "Balance of \u20B9") +
+        amount.toLocaleString("en-IN") +
+        " received" +
+        (upiRef.length > 0 ? " (UPI " + upiRef + ")" : ""),
+      actorRole: Role.SELLER,
+    },
+  });
+
+  try {
+    await buyerSettlementUpdate(order.id, kind);
+  } catch (e) {
+    console.error("buyerSettlementUpdate failed for order " + order.code, e);
+  }
+
+  return NextResponse.json({ ok: true, settlement: settlementNext });
 }
