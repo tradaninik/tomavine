@@ -6,6 +6,7 @@ import { Btn, Card, Pill, ProductThumb, SectionTitle, inr, inputCls } from "../u
 import { displayName, useLang } from "@/lib/i18n";
 import { displayPriceOf } from "@/lib/cart";
 import { SOIL_CHOICES, type SoilChoice } from "@/lib/advisor";
+import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 type Item = {
   id: string; nameEn: string; names: unknown; category: string; priceMin: number; mrp: number;
@@ -13,10 +14,16 @@ type Item = {
   variants: { id: string; price: number }[];
   rescue: { pct: number; expiresAt: string } | null;
   nursery: { name: string; slug: string; city: string };
-  reasons: { season: string | null; soil: boolean; near: boolean };
+  reasons: { season: string | null; soil: boolean; near: boolean; locLabel: string | null };
 };
 
-type Result = { month: number; seasons: string[]; plantNow: Item[]; later: Item[] };
+type Result = {
+  month: number;
+  seasons: string[];
+  plantNow: Item[];
+  later: Item[];
+  location?: { echo: string | null } | null;
+};
 
 const SOIL_LABELS: Record<SoilChoice, string> = {
   loamy: "Loamy", sandy: "Sandy", clay: "Clay", black: "Black", red: "Red", unsure: "Not sure",
@@ -43,7 +50,7 @@ function ResultCard({ it, lang, later }: { it: Item; lang: Parameters<typeof dis
               <Pill tone="leaf">{later ? `Best in ${it.reasons.season}` : `Sows in ${it.reasons.season}`}</Pill>
             ) : null}
             {it.reasons.soil ? <Pill tone="amber">Suits your soil</Pill> : null}
-            {it.reasons.near ? <Pill tone="sky">Nursery near you</Pill> : null}
+            {it.reasons.locLabel ? <Pill tone="sky">{it.reasons.locLabel}</Pill> : null}
             {it.stock === 0 ? <Pill tone="rose">Out of stock</Pill> : null}
           </div>
         </div>
@@ -67,7 +74,7 @@ export default function AdvisorPage() {
   const run = useCallback(async (m: number, s: SoilChoice, c: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/advisor?month=${m}&soil=${s}&city=${encodeURIComponent(c)}`);
+      const res = await fetch(`/api/advisor?month=${m}&soil=${s}&loc=${encodeURIComponent(c)}`);
       if (res.ok) setResult(await res.json());
     } catch {
       /* keep last result */
@@ -79,9 +86,15 @@ export default function AdvisorPage() {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d && d.user && typeof d.user.city === "string" && d.user.city) {
-          setCity(d.user.city);
-          run(new Date().getMonth() + 1, "unsure", d.user.city);
+        // S6-D: a saved pincode pins the results best; city is the fallback.
+        if (d && d.user) {
+          const pin = typeof d.user.pincode === "string" && /^[1-9]\d{5}$/.test(d.user.pincode) ? d.user.pincode : "";
+          const town = typeof d.user.city === "string" && d.user.city ? d.user.city : "";
+          const pref = pin || town;
+          if (pref) {
+            setCity(pref);
+            run(new Date().getMonth() + 1, "unsure", pref);
+          }
         }
       })
       .catch(() => undefined);
@@ -131,13 +144,14 @@ export default function AdvisorPage() {
             </select>
           </label>
           <label className="text-sm font-medium text-[#1C3A2A]">
-            City
+            Location
             <div className="mt-1 flex gap-2">
               <input
                 className={inputCls}
                 value={city}
                 maxLength={60}
-                placeholder="e.g. Hyderabad"
+                list={LOCATION_LIST_ID}
+                placeholder="Town, city, state or pincode"
                 onChange={(e) => setCity(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") run(month, soil, city);
@@ -147,11 +161,20 @@ export default function AdvisorPage() {
                 Go
               </Btn>
             </div>
+            <span className="mt-1 block text-xs text-[#8E9A84]">
+              Pincodes work best - town, district and state names work too.
+            </span>
           </label>
+          <LocationDatalist />
         </div>
         {result ? (
           <p className="mt-3 text-xs text-[#66735F]">
             {monthLabel(result.month)} is {result.seasons.length > 0 ? result.seasons.join(" · ") : "a transition"} season.
+          </p>
+        ) : null}
+        {result && result.location && result.location.echo ? (
+          <p className="mt-2 text-xs font-medium text-[#2F6B3F]">
+            Showing results for: {result.location.echo}
           </p>
         ) : null}
       </Card>
