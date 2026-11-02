@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Btn, Card, Pill, ProductThumb, SectionTitle, inr, inputCls } from "../ui";
 import { displayName, useLang } from "@/lib/i18n";
 import { displayPriceOf } from "@/lib/cart";
-import { LIGHT_CHOICES, SOIL_CHOICES, type LightChoice, type SoilChoice } from "@/lib/advisor";
+import { LIGHT_CHOICES, SOIL_CHOICES, lightOf, type LightChoice, type SoilChoice } from "@/lib/advisor";
 import { LOCATION_LIST_ID, LocationDatalist } from "@/lib/location-options";
 
 // ADVR: two-track wizard - home -> garden | farm -> results. Pure
@@ -39,6 +39,7 @@ type View = "home" | "garden" | "farm" | "results";
 type Track = "garden" | "farm";
 type SpaceChoice = "balcony" | "terrace" | "indoor" | "kitchen";
 type Tf = (key: string, vars?: Record<string, string | number>) => string;
+type LightFilter = LightChoice | "all";
 
 // Space sets a light guess (advr_space_hint); the user can override it.
 const SPACE_CHOICES: SpaceChoice[] = ["balcony", "terrace", "indoor", "kitchen"];
@@ -60,6 +61,8 @@ const LIGHT_KEY: Record<LightChoice, string> = {
   partial: "advr_light_partial",
   shade: "advr_light_low",
 };
+
+const LIGHT_FILTERS: LightFilter[] = ["all", "sun", "partial", "shade"];
 
 const SOIL_KEY: Record<SoilChoice, string> = {
   loamy: "advr_soil_loamy",
@@ -196,6 +199,7 @@ export default function AdvisorPage() {
   const [acreage, setAcreage] = useState("a1");
   const [crop, setCrop] = useState("all");
   const [result, setResult] = useState<Result | null>(null);
+  const [filter, setFilter] = useState<LightFilter>("all");
   const [loading, setLoading] = useState(false);
 
   // S6-D: a saved pincode pins the results best; city is the fallback.
@@ -227,6 +231,7 @@ export default function AdvisorPage() {
       if (res.ok) {
         setResult(await res.json());
         setView("results");
+        setFilter(track === "garden" ? light : "all");
       }
     } catch {
       /* keep last result */
@@ -371,6 +376,13 @@ export default function AdvisorPage() {
 
   const garden = track === "garden";
   const showLight = result !== null && result.light !== null;
+  const keep = (it: Item): boolean => {
+    if (filter === "all") return true;
+    const need = lightOf(it.care);
+    return need !== null && need.includes(filter);
+  };
+  const nowList = result === null ? [] : result.plantNow.filter(keep);
+  const laterList = result === null ? [] : result.later.filter(keep);
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -393,30 +405,41 @@ export default function AdvisorPage() {
         </p>
       ) : null}
 
+      {garden && result ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-[#1C3A2A]">{t("advr_filter_label")}</span>
+          {LIGHT_FILTERS.map((f) => (
+            <Chip key={f} on={filter === f} onClick={() => setFilter(f)}>
+              {f === "all" ? t("advr_filter_all") : t(LIGHT_KEY[f])}
+            </Chip>
+          ))}
+        </div>
+      ) : null}
+
       {loading && result === null ? <p className="mt-4 text-[#1C3A2A]/60">{t("advr_loading")}</p> : null}
 
       {result ? (
         <div className="mt-4 space-y-6">
-          <NurseryStrip items={result.plantNow} tf={tf} />
+          <NurseryStrip items={nowList} tf={tf} />
           <section>
             <h2 className="text-lg font-semibold text-[#20291D]">
-              {tf("advr_results_now", { month: monthLabel(result.month), n: result.plantNow.length })}
+              {tf("advr_results_now", { month: monthLabel(result.month), n: nowList.length })}
             </h2>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {result.plantNow.length === 0 ? (
-                <p className="text-sm text-[#1C3A2A]/60">{t("advr_results_none")}</p>
+              {nowList.length === 0 ? (
+                <p className="text-sm text-[#1C3A2A]/60">{filter === "all" ? t("advr_results_none") : t("advr_filter_none")}</p>
               ) : (
-                result.plantNow.map((it) => (
+                nowList.map((it) => (
                   <ResultCard key={it.id} it={it} lang={lang} later={false} showLight={showLight} tf={tf} />
                 ))
               )}
             </div>
           </section>
-          {result.later.length > 0 ? (
+          {laterList.length > 0 ? (
             <section>
-              <h2 className="text-lg font-semibold text-[#20291D]">{tf("advr_results_later", { n: result.later.length })}</h2>
+              <h2 className="text-lg font-semibold text-[#20291D]">{tf("advr_results_later", { n: laterList.length })}</h2>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {result.later.map((it) => (
+                {laterList.map((it) => (
                   <ResultCard key={it.id} it={it} lang={lang} later={true} showLight={showLight} tf={tf} />
                 ))}
               </div>

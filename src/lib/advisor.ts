@@ -66,8 +66,9 @@ export type LightChoice = "sun" | "partial" | "shade";
 export const LIGHT_CHOICES: LightChoice[] = ["sun", "partial", "shade"];
 
 const LIGHT_SUN_RE = /(full sun|direct sun|full sunlight|full day)/;
+const LIGHT_NO_SUN_RE = /no direct sun/;
 const LIGHT_PARTIAL_RE =
-  /(partial|part sun|part shade|semi|half sun|half shade|morning sun|filtered|dappled|bright indirect)/;
+  /(partial|part sun|part shade|semi|half sun|half shade|morning sun|filtered|dappled|bright indirect|bright light)/;
 const LIGHT_SHADE_RE = /(shade|indirect|low light)/;
 
 export function lightOf(care: unknown): LightChoice[] | null {
@@ -78,7 +79,7 @@ export function lightOf(care: unknown): LightChoice[] | null {
   const low = raw.toLowerCase();
   if (low.trim() === "") return null;
   const out: LightChoice[] = [];
-  if (LIGHT_SUN_RE.test(low)) out.push("sun");
+  if (LIGHT_SUN_RE.test(low) && !LIGHT_NO_SUN_RE.test(low)) out.push("sun");
   if (LIGHT_PARTIAL_RE.test(low)) out.push("partial");
   if (LIGHT_SHADE_RE.test(low)) out.push("shade");
   return out.length === 0 ? null : out; // unrecognised -> don't exclude
