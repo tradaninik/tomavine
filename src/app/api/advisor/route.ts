@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
+  ADVISOR_CATS,
   classify,
+  LIGHT_CHOICES,
   parseLocQuery,
   seasonsForMonth,
   SOIL_CHOICES,
   type AdvisorCandidate,
+  type LightChoice,
   type SoilChoice,
   type SvcLocLite,
 } from "@/lib/advisor";
@@ -19,6 +22,12 @@ export async function GET(req: Request) {
   const soilParam = sp.get("soil") ?? "unsure";
   const soil = (SOIL_CHOICES as string[]).includes(soilParam) ? (soilParam as SoilChoice) : "unsure";
   const locRaw = (sp.get("loc") ?? sp.get("city") ?? "").slice(0, 60);
+  // ADVR: garden-track light and farm-track category chip. Absent or
+  // invalid values simply opt out (same contract as soil above).
+  const lightParam = sp.get("light") ?? "";
+  const light = (LIGHT_CHOICES as string[]).includes(lightParam) ? (lightParam as LightChoice) : null;
+  const catParam = sp.get("cat") ?? "";
+  const cat = ADVISOR_CATS.includes(catParam) ? catParam : null;
 
   // S6-D: the pincode -> city/state dictionary (active rows only),
   // resolved once per request and shared by every candidate.
@@ -29,7 +38,11 @@ export async function GET(req: Request) {
 
   const hidden = await hiddenCategoryWhere();
   const rows = await db.product.findMany({
-    where: { hidden: false, ...(hidden === null ? {} : hidden) },
+    where: {
+      hidden: false,
+      ...(cat === null ? {} : { category: cat }),
+      ...(hidden === null ? {} : hidden),
+    },
     select: {
       id: true, nameEn: true, names: true, category: true, priceMin: true, mrp: true,
       stock: true, image: true, care: true, agri: true,
@@ -53,7 +66,7 @@ export async function GET(req: Request) {
 
   const loc = parseLocQuery(locRaw, svcLocs);
   const pinState = new Map(svcLocs.map((l) => [l.pincode, l.state]));
-  const input = { month, soil, loc, pinState };
+  const input = { month, soil, light, loc, pinState };
   const scored = rows.map((r) => {
     const cand: AdvisorCandidate = {
       ...r,
@@ -85,6 +98,8 @@ export async function GET(req: Request) {
     month,
     seasons: seasonsForMonth(month),
     location: { echo: loc.echo },
+    light,
+    cat,
     plantNow: scored.filter((x) => x.plantNow).map(strip),
     later: scored.filter((x) => !x.plantNow).map(strip),
   });

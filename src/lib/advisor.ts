@@ -56,6 +56,48 @@ export function soilMatches(care: unknown, soil: SoilChoice): boolean {
   return (SOIL_KEYWORDS[soil] ?? []).some((k) => raw.includes(k));
 }
 
+// -- Light (ADVR: garden track) ------------------------------------
+// care.sun is FREE TEXT (same contract as agri.season and care.soil):
+// keywords are parsed, and missing or unrecognised data never
+// excludes a product. lightOf returns the user answers a plant
+// tolerates, or null when there is no usable signal.
+
+export type LightChoice = "sun" | "partial" | "shade";
+export const LIGHT_CHOICES: LightChoice[] = ["sun", "partial", "shade"];
+
+const LIGHT_SUN_RE = /(full sun|direct sun|full sunlight|full day)/;
+const LIGHT_PARTIAL_RE =
+  /(partial|part sun|part shade|semi|half sun|half shade|morning sun|filtered|dappled|bright indirect)/;
+const LIGHT_SHADE_RE = /(shade|indirect|low light)/;
+
+export function lightOf(care: unknown): LightChoice[] | null {
+  const raw =
+    care !== null && typeof care === "object" && typeof (care as Record<string, unknown>).sun === "string"
+      ? ((care as Record<string, unknown>).sun as string)
+      : "";
+  const low = raw.toLowerCase();
+  if (low.trim() === "") return null;
+  const out: LightChoice[] = [];
+  if (LIGHT_SUN_RE.test(low)) out.push("sun");
+  if (LIGHT_PARTIAL_RE.test(low)) out.push("partial");
+  if (LIGHT_SHADE_RE.test(low)) out.push("shade");
+  return out.length === 0 ? null : out; // unrecognised -> don't exclude
+}
+
+// Farm-track chip filter values: the bulk-first top categories after
+// the S6-B pivot, in storefront order (products carry these as their
+// legacy category key).
+export const ADVISOR_CATS: string[] = [
+  "saplings",
+  "irrigation",
+  "inputs",
+  "seeds",
+  "tools",
+  "plant-protection",
+  "pots",
+  "landscaping",
+];
+
 // -- Location query (S6-D) --------------------------------------
 // One search box, three inputs: a 6-digit pincode, a state (name
 // or TG/AP/KA code) or a city/town/area name. Parsing is pure -
@@ -264,10 +306,17 @@ export type AdvisorCandidate = {
 export type AdvisorReason = {
   season: SeasonName | "all-year" | null;
   soil: boolean;
+  light: boolean | null;
   near: boolean;
   locLabel: string | null;
 };
-export type AdvisorInput = { month: number; soil: SoilChoice; loc: LocQuery; pinState?: Map<string, string> };
+export type AdvisorInput = {
+  month: number;
+  soil: SoilChoice;
+  light?: LightChoice | null;
+  loc: LocQuery;
+  pinState?: Map<string, string>;
+};
 
 export function classify(c: AdvisorCandidate, input: AdvisorInput) {
   const parsed = parseSeason(c.agri);
@@ -276,13 +325,17 @@ export function classify(c: AdvisorCandidate, input: AdvisorInput) {
   const hitSeason = parsed.seasons.find((s) => monthSeasons.includes(s)) ?? null;
   const locality = localityOf(c.nursery, input.loc, input.pinState);
   const soil = soilMatches(c.care, input.soil);
+  const lightNeed = lightOf(c.care);
+  const wantLight = input.light ?? null;
+  const lightHit = lightNeed !== null && wantLight !== null && lightNeed.includes(wantLight);
 
   const reasons: AdvisorReason = {
     season: parsed.declared ? (parsed.yearRound ? "all-year" : hitSeason ?? parsed.seasons[0]) : null,
     soil,
+    light: lightNeed === null || wantLight === null ? null : lightHit,
     near: locality.tier >= 2,
     locLabel: locality.label,
   };
-  const score = locality.tier + (soil ? 1 : 0) + (parsed.declared && seasonHit ? 1 : 0);
+  const score = locality.tier + (soil ? 1 : 0) + (parsed.declared && seasonHit ? 1 : 0) + (lightHit ? 1 : 0);
   return { plantNow: seasonHit, reasons, score };
 }
