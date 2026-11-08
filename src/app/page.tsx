@@ -77,7 +77,26 @@ function Landing() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data.nurseries)) {
-          setNurseries(data.nurseries.slice(0, 4));
+          // T1 quality gate: a nursery leads the featured strip only with
+          // a real track record - rating average >= 4.0 plus at least 3
+          // non-hidden listings. These are the two per-nursery quality
+          // signals the public catalog API already returns; the schema
+          // keeps no nursery-level review count (reviews hang off
+          // products), so a review-count floor needs an API change -
+          // recorded as T1B follow-up work.
+          const all: NurseryCard[] = data.nurseries;
+          const qualifies = (n: NurseryCard) => n.ratingAvg >= 4.0 && n.productCount >= 3;
+          const leaders = all.filter(qualifies);
+          const featured =
+            leaders.length >= 4
+              ? leaders.slice(0, 4)
+              : leaders.concat(all.filter((n) => !qualifies(n)).slice(0, 4 - leaders.length));
+          // Fallback (worklog decision): fewer than 4 qualify -> backfill
+          // from the same VERIFIED rating-ordered list, so the strip keeps
+          // 4 cards whenever the catalog can fill it. Fewer than 4 VERIFIED
+          // nurseries in total -> fewer cards (the section hides at zero,
+          // so an empty strip is never rendered).
+          setNurseries(featured);
         }
       })
       .catch(() => undefined);
