@@ -36,6 +36,7 @@ type NurseryCard = {
   city: string;
   ratingAvg: number;
   productCount: number;
+  reviewCount: number;
   image: string | null;
 };
 
@@ -77,15 +78,14 @@ function Landing() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data.nurseries)) {
-          // T1 quality gate: a nursery leads the featured strip only with
-          // a real track record - rating average >= 4.0 plus at least 3
-          // non-hidden listings. These are the two per-nursery quality
-          // signals the public catalog API already returns; the schema
-          // keeps no nursery-level review count (reviews hang off
-          // products), so a review-count floor needs an API change -
-          // recorded as T1B follow-up work.
+          // T1C quality gate (spec section 5): a nursery leads the
+          // featured strip only with a real track record - rating
+          // average >= 4.0, at least 3 non-hidden listings AND at
+          // least 2 reviews across its non-hidden products
+          // (reviewCount, spec section 4). The floor decides who
+          // LEADS the strip; backfill below still has no gate.
           const all: NurseryCard[] = data.nurseries;
-          const qualifies = (n: NurseryCard) => n.ratingAvg >= 4.0 && n.productCount >= 3;
+          const qualifies = (n: NurseryCard) => n.ratingAvg >= 4.0 && n.productCount >= 3 && n.reviewCount >= 2;
           const leaders = all.filter(qualifies);
           const featured =
             leaders.length >= 4

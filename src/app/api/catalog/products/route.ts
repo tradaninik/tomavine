@@ -40,6 +40,17 @@ async function applyCategorySlugFilter(where: Prisma.ProductWhereInput, catSlug:
   return where;
 }
 
+// T1C (spec docs/t1b-search-spec.md 3.2): pagination + price/stock
+// filters, parsed in the route's existing lenient style - malformed
+// values clamp or are ignored, never a 500. Whole-number strings
+// only; anything else (negative, decimal, empty) is malformed.
+function positiveInt(v: string | null): number | null {
+  if (v === null || !/^\d+$/.test(v)) {
+    return null;
+  }
+  return Number.parseInt(v, 10);
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const category = url.searchParams.get("category");
@@ -50,12 +61,25 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q");
   const idsParam = url.searchParams.get("ids");
 
+  // T1C params (spec 3.2). size defaults to 100 = the legacy take,
+  // so every existing caller (homepage, /bulk, the ?ids= lookups)
+  // keeps its exact behavior without passing anything.
+  const pageRaw = positiveInt(url.searchParams.get("page"));
+  const page = pageRaw !== null && pageRaw >= 1 ? pageRaw : 1;
+  const sizeRaw = positiveInt(url.searchParams.get("size"));
+  const size = sizeRaw === null ? 100 : Math.min(100, Math.max(1, sizeRaw));
+  const min = positiveInt(url.searchParams.get("min"));
+  const max = positiveInt(url.searchParams.get("max"));
+  const stockOnly = url.searchParams.get("stock") === "1";
+
   const where: Prisma.ProductWhereInput = publicProductWhere();
 
   if (catSlug) {
     const withCat = await applyCategorySlugFilter(where, catSlug);
     if (withCat === null) {
-      return NextResponse.json({ products: [] });
+      // Unknown or inactive slug (spec 3.4): empty list, now with
+      // the correct meta - same leniency as before.
+      return NextResponse.json({ products: [], total: 0, page: page, size: size, pageCount: 0 });
     }
   }
 
@@ -84,6 +108,23 @@ export async function GET(req: Request) {
     where.rescue = { expiresAt: { gt: new Date() } };
   }
 
+  // T1C filters (spec 3.2): min/max target Product.priceMin - the
+  // number the tile displays via inr(); stock=1 keeps only stock > 0.
+  // min > max is not an error - the pair simply matches nothing.
+  if (min !== null || max !== null) {
+    const priceFilter: { gte?: number; lte?: number } = {};
+    if (min !== null) {
+      priceFilter.gte = min;
+    }
+    if (max !== null) {
+      priceFilter.lte = max;
+    }
+    where.priceMin = priceFilter;
+  }
+  if (stockOnly) {
+    where.stock = { gt: 0 };
+  }
+
   if (q) {
     where.OR = [
       { nameEn: { contains: q, mode: "insensitive" } },
@@ -94,17 +135,31 @@ export async function GET(req: Request) {
   if (idsParam) {
     const ids = idsParam.split(",").map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 50);
     if (ids.length === 0) {
-      return NextResponse.json({ products: [] });
+      return NextResponse.json({ products: [], total: 0, page: page, size: size, pageCount: 0 });
     }
     where.id = { in: ids };
   }
+
+  // T1C (spec 3.3): total counts the FULL match (not just this
+  // page); pageCount = ceil(total / size), 0 when total is 0 so the
+  // pager hides cleanly. Order stays createdAt DESC; a page beyond
+  // pageCount is HTTP 200 with an empty array (the client clamps).
+  const total = await db.product.count({ where: where });
+  const pageCount = total === 0 ? 0 : Math.ceil(total / size);
 
   const products = await db.product.findMany({
     where: where,
     include: PUBLIC_PRODUCT_INCLUDE,
     orderBy: { createdAt: "desc" },
-    take: 100,
+    skip: (page - 1) * size,
+    take: size,
   });
 
-  return NextResponse.json({ products: products.map((p) => productCard(p)) });
+  return NextResponse.json({
+    products: products.map((p) => productCard(p)),
+    total: total,
+    page: page,
+    size: size,
+    pageCount: pageCount,
+  });
 }

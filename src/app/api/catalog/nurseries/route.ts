@@ -68,6 +68,21 @@ export async function GET(req: Request) {
     orderBy: { ratingAvg: "desc" },
   });
 
+  // T1C (spec section 4): per-nursery reviewCount - Review rows on
+  // the nursery's non-hidden products (a hidden product is not part
+  // of the public catalog; retailOk is a commerce switch, not a
+  // content switch, so it is not part of the definition). One small
+  // query + an in-memory aggregation; no schema change, computed per
+  // request.
+  const productReviewCounts = await db.product.findMany({
+    where: { hidden: false, nursery: { status: "VERIFIED" } },
+    select: { nurseryId: true, _count: { select: { reviews: true } } },
+  });
+  const reviewsByNursery = new Map<string, number>();
+  for (const p of productReviewCounts) {
+    reviewsByNursery.set(p.nurseryId, (reviewsByNursery.get(p.nurseryId) ?? 0) + p._count.reviews);
+  }
+
   const userPoint = district ? { lat: district.lat, lng: district.lng } : null;
 
   let nurseries = rows.map((n) => {
@@ -100,6 +115,7 @@ export async function GET(req: Request) {
       physVerifiedAt: n.physVerifiedAt ? n.physVerifiedAt.toISOString() : null,
       districtCode: n.districtCode,
       productCount: n._count.products,
+      reviewCount: reviewsByNursery.get(n.id) ?? 0,
       serviceAreaCount: n.serviceAreas.length,
       distanceKm: distanceKm,
       eta: eta ? { band: eta.band, minDays: eta.minDays, maxDays: eta.maxDays } : null,
